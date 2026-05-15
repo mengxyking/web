@@ -1,0 +1,15 @@
+erzhuanjia_kaiguan=开
+erzhuanjia_touzhu_jine=3,20,30,31
+erzhuanjia_name=力薄才疏
+erzhuanjia_genfan=跟专家
+erzhuanjia_baochixianzhuang=保持现状
+erzhuanjia_saidao=第3名
+
+
+
+#erzhuanjia_kaiguan   开  可以配置 开、关
+#erzhuanjia_touzhu_jine   1,5,10,20,30,31    第二专家的投注金额，金额之间用逗号隔开
+#erzhuanjia_name    力薄才疏   选择下注的专家的名字，可以配置  "力薄才疏","鲁班","惹不起","老表","肉白骨","嫩草"
+#erzhuanjia_genfan   跟专家   可以配置 跟专家、反专家
+#erzhuanjia_baochixianzhuang   保持现状  可以配置 保持现状、去最大、去最小
+#erzhuanjia_saidao    第1名,第2名  可以配  第1名,第2名,第3名,第4名,第5名,第6名,第7名,第8名,第9名,第10名

@@ -1,0 +1,16 @@
+{
+    "dan": "1,3,5,9,17,21,11,21",
+    "shuang": "2,4,8,16,20,10,20",
+    "check_second": 5,
+    "check_second_jiange": 111,
+    "api_url": "https://api.trpsp.com/api/lottery_logs/ds/one/chart?limit=150&page=1",
+    "test_mode": "否",
+    "wallet_address": "TAMy8fj8ViqUjt6MZjtRaXDLLZubAsa47h",
+    "trade_password": "12345678",
+    "danshuang1": "单,单,跟",
+    "danshuang2": "单",
+    "danshuang3": "双",
+    "danshuang4": "单",
+    "danshuang5": "双",
+    "danshuang6": "单"
+}

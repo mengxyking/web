@@ -1,0 +1,763 @@
+import random
+import threading
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.common.action_chains import ActionChains
+import os
+import pyautogui
+import pyperclip
+pyautogui.FAILSAFE=False
+import subprocess
+import json
+def read_specific_line(line_number):
+    file_path = 'tz_config.txt'
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            # 通过生成器表达式读取指定行，并捕获 StopIteration 异常
+            lines = (line for index, line in enumerate(file, start=1) if index == line_number)
+            # 使用 next() 尝试获取第一（也是唯一）个值，如果生成器为空则返回 None
+            return next(lines, None)
+    except FileNotFoundError:
+        print(f"Error: The file {file_path} was not found.")
+        return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+def time_to_seconds(time_str):
+    # 分割字符串以获取分钟和秒
+    minutes, seconds = map(int, time_str.split(':'))
+    # 计算总秒数
+    total_seconds = minutes * 60 + seconds
+    return total_seconds
+def inter(path,monidizhi,ex):
+    subprocess.run(['taskkill', '/F', '/IM', 'Firefox.exe'])
+    time.sleep(4)
+    options = Options()
+    # options.add_argument('-headless')
+    options.set_preference("dom.webdriver.enabled", False)
+    options.set_preference("general.useragent.override",
+                           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    gecko_driver_path = './geckodriver.exe'
+    options._binary_location = path
+    # 固定搭配直接用就行了
+    service = Service(executable_path=gecko_driver_path)
+    driver = webdriver.Firefox(options=options, service=service)
+    driver.get(monidizhi)  # 替换为你要打开的网页链接
+    # 定位到包含文案的元素
+    time.sleep(15)
+    while (True):
+        try:
+            yue = driver.find_element(By.XPATH, "/html/body/div[1]/div[2]/div[1]/div[1]/div/div[1]")
+            print("判断是否是澳洲10")
+            if(yue.text == "澳洲幸运10"):
+                print("正常进入啦啦啦啦啦")
+                # driver.switch_to.frame("frame")
+                # time.sleep(1)
+                # yue = driver.find_element(By.XPATH, '//*[@id="cdClose"]')
+                # print("------------------------->",yue.text)
+                break
+            print("还不在啊")
+        except:
+            print("还不在啊")
+        time.sleep(5)
+    time.sleep(3)
+
+    try:#点击十字盘
+        yue = driver.find_element(By.XPATH, "/html/body/div[1]/div[2]/div[3]/div[13]/a[2]")
+        if(yue):
+            yue.click()
+            time.sleep(3)
+    except:
+        print("还不在啊")
+
+    driver.switch_to.frame("frame")
+    time.sleep(1)
+    while(True):
+        yue = driver.find_element(By.XPATH, '//*[@id="cdClose"]')
+        print("------------------------->", yue.text)
+        times = time_to_seconds(yue.text)
+        if(int(times)>45):
+            break
+        time.sleep(1)
+        print("还得等啊。。。。。")
+
+    return driver
+# touzhu = [1,3,4,8,16,32,64]
+# touzhu_flag = "xiao"
+# mingci_flag = "冠军"
+def count_leading_zeros(arr):
+    count = 0
+    for num in arr:
+        if num == 0:
+            count += 1
+        else:
+            break
+    return count
+
+#print(count_leading_zeros(touzhu))  # 输出: 2
+def judge_numbers(arr, criterion):
+    if criterion == "dan":
+        return all(num % 2 != 0 for num in arr)
+    elif criterion == "shuang":
+        return all(num % 2 == 0 for num in arr)
+    elif criterion == "da":
+        return all(num > 5 for num in arr)
+    elif criterion == "xiao":
+        return all(num <= 5 for num in arr)
+    else:
+        return False
+
+
+lock = threading.Lock()
+thread_count = 0
+
+def jianshuo(driver,touzhujine, saidao,zhuanjia,saidaos_length,genfanzhuanjia,baochixianzhuang):
+    global thread_count
+    zong = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+    jine_count = 0
+    saidaos = read_specific_line(int(saidao)).strip()
+    saidaos = str(saidaos).split(",")
+    print("saidaos----->",saidaos)
+    saidao_index = 0
+    while(True):
+        #print("saidao,zhuanjia----",saidao,zhuanjia)
+        if (touzhujine[jine_count] == 0):
+            while(True):
+                print("当前需要等一手", touzhujine[jine_count])
+                url = "https://1689567.com/api/expertsRecommend/detail.do?lotCode=10012&groupCode=1&type=0" + "&ranking=" + str(
+                    saidaos[saidao_index]) + "&userId=" + str(zhuanjia)
+
+                responses = requests.get(url=url)
+                # print("responses.json----------->", responses.json())
+                re_json = responses.json()
+                codes = re_json["result"]["data"]["head"]["recommendCode"]
+                print("codes=", codes)
+                code_list = str(codes).split(",")
+                print("genfanzhuanjia=",genfanzhuanjia)
+                print(genfanzhuanjia == "反专家")
+
+                if (baochixianzhuang == "去最大"):
+                    numbers = [int(num) for num in code_list]
+                    # 找到列表中的最大值
+                    max_value = max(numbers)
+                    # 从列表中移除最大值
+                    numbers.remove(max_value)
+                    # 如果需要，将列表中的整数转换回字符串
+                    code_list = [str(num) for num in numbers]
+                if (baochixianzhuang == "去最小"):
+                    numbers = [int(num) for num in code_list]
+                    # 找到列表中的最大值
+                    max_value = min(numbers)
+                    # 从列表中移除最大值
+                    numbers.remove(max_value)
+                    # 如果需要，将列表中的整数转换回字符串
+                    code_list = [str(num) for num in numbers]
+
+                if(genfanzhuanjia == "反专家"):
+                    code_list = [item for item in code_list if item not in zong]
+
+
+
+                wait_for_kaijiang()
+                time.sleep(2)
+
+                kaijiangjieguo2 = getData(saidaos[saidao_index], "https://1689567.com/api/pks/getPksHistoryList.do?lotCode=10012")
+                print("str(kaijiangjieguo2) , code_list",str(kaijiangjieguo2) ,code_list)
+                if (str(kaijiangjieguo2) in code_list):
+                    print("当前等一手失败")
+                else:
+                    print("当前等一手成功")
+                    jine_count += 1
+                    saidao_index += 1
+                    break
+        time.sleep(15)
+        while (True):
+            try:
+                driver.switch_to.frame("frame")
+            except:
+                print("崩溃了1")
+
+            try:
+                yue = driver.find_element(By.XPATH, '//*[@id="cdClose"]')
+                print("------------------------->", yue.text)
+                times = time_to_seconds(yue.text)
+                if (int(times) > 35):
+                    break
+                time.sleep(1)
+                print("还得等啊。。。。。")
+            except:
+                print("崩溃了2")
+
+        try:
+            ele = '//*[@id="drawNumber"]'
+            yue = driver.find_element(By.XPATH, ele)
+            print("------------------------->", yue.text)
+            qishu = yue.text
+            print("qishu----->", qishu)
+            time.sleep(5)
+        except:
+            print("崩溃了3")
+
+        with lock:
+            try:
+                driver.switch_to.frame("frame")
+            except:
+                print("bengkuile4")
+
+            url = "https://1689567.com/api/expertsRecommend/detail.do?lotCode=10012&groupCode=1&type=0" + "&ranking=" + str(
+                saidaos[saidao_index]) + "&userId=" + str(zhuanjia)
+            print("url---",url)
+            #time.sleep(random.randint(0,5))
+            responses = requests.get(url=url)
+            #print("responses.json----------->", responses.json())
+            re_json = responses.json()
+            codes = re_json["result"]["data"]["head"]["recommendCode"]
+            print("codes=", codes)
+
+            code_list = str(codes).split(",")
+
+            print("genfanzhuanjia=", genfanzhuanjia)
+            print(genfanzhuanjia == "反专家")
+
+            if (baochixianzhuang == "去最大"):
+                numbers = [int(num) for num in code_list]
+                # 找到列表中的最大值
+                max_value = max(numbers)
+                # 从列表中移除最大值
+                numbers.remove(max_value)
+                # 如果需要，将列表中的整数转换回字符串
+                code_list = [str(num) for num in numbers]
+            if (baochixianzhuang == "去最小"):
+                numbers = [int(num) for num in code_list]
+                # 找到列表中的最大值
+                max_value = min(numbers)
+                # 从列表中移除最大值
+                numbers.remove(max_value)
+                # 如果需要，将列表中的整数转换回字符串
+                code_list = [str(num) for num in numbers]
+
+            if (genfanzhuanjia == "反专家"):
+                code_list = [item for item in zong if item not in code_list]
+                print("code_list=",code_list)
+            for code in code_list:
+                ele = f"/html/body/div/div[2]/div[1]/table[{saidaos[saidao_index]}]/tbody/tr[{str(int(code) + 1)}]/th/span"
+
+                try:
+                    yue = driver.find_element(By.XPATH, ele)
+                    if (yue):
+                        yue.click()
+                    time.sleep(0.2)
+                except:
+                    print("不在啊。。。")
+
+            try:
+                yue11 = driver.find_element(By.XPATH, "/html/body/div/div[1]/div[2]/div/label[2]/input")
+                yue11.send_keys(touzhujine[jine_count])
+                time.sleep(0.3)
+            except:
+                print("不在啊。。。")
+
+            try:
+                yue11 = driver.find_element(By.XPATH, "/html/body/div/div[1]/div[2]/div/input[1]")
+                yue11.click()
+                time.sleep(1.8)
+            except:
+                print("不在啊。。。")
+
+            pyautogui.press('enter')
+            time.sleep(0.3)
+            time.sleep(0.3)
+        print("开始等待开奖-----------------rank=",saidaos[saidao_index])
+
+        wait_for_kaijiang()
+
+        time.sleep(5)
+        url_jiekou = "https://1689567.com/api/pks/getPksHistoryList.do?lotCode=10012"
+        pos = int(saidaos[saidao_index])
+        kaijiangjieguo = getData(pos=pos,jiekoudizhi=url_jiekou)
+
+        if(str(kaijiangjieguo) in code_list):
+            print("赢了,rank=",saidaos[saidao_index])
+            jine_count = 0
+            saidao_index = 0
+        else:
+            print("输了,rank=",saidaos[saidao_index])
+            jine_count += 1
+            saidao_index += 1
+            print("jine_count---------->",jine_count)
+        if(jine_count>len(touzhujine)):
+            jine_count = 0
+        #time.sleep(3)
+        if(saidao_index >= len(saidaos)):
+            saidao_index = 0
+        print("jine_count=",jine_count)
+
+        print("-----------------终点---------------------------")
+
+cached_data = None
+cache_time = 0
+def get_jiekou_shuju(jiekoudizhi, retries=3, delay=1):
+    global cached_data, cache_time
+    current_time = time.time()
+     # 检查缓存是否有效
+    if cached_data is not None and (current_time - cache_time) < 5:
+        print("使用缓存数据")
+        return cached_data
+    with lock11:  # 确保只有一个线程可以进行请求
+        # 再次检查缓存，因为可能有其他线程已经填充了缓存
+        if cached_data is not None and (current_time - cache_time) < 5:
+            print("使用缓存数据")
+            return cached_data
+         # 尝试请求数据，最多重试 retries 次
+        for attempt in range(retries):
+            try:
+                response = requests.get(jiekoudizhi)
+                # 检查请求是否成功
+                if response.status_code == 200:
+                    # 获取返回的内容
+                    data = response
+                    print(f"请求到的新数据: {data}")
+                    # 更新缓存
+                    cached_data = data
+                    cache_time = current_time
+                    return data
+                else:
+                    print(f"请求失败，状态码: {response.status_code}")
+            except requests.RequestException as e:
+                print(f"请求异常: {e}")
+             # 等待一段时间再重试
+            time.sleep(delay)
+        print("所有重试均失败")
+        return None
+def getData(pos,jiekoudizhi):
+    pos = int(pos)
+    url = jiekoudizhi
+    response = get_jiekou_shuju(url)
+    if response.status_code == 200:
+        # 获取返回的内容
+        data = response.text
+        small_count = 0
+        #print("data-------------->",data)
+        return int(json.loads(data)["result"]["data"][small_count]["preDrawCode"].split(",")[pos-1])
+
+def wait_for_kaijiang():
+    from datetime import datetime
+    import time
+    # 目标时间，精确到秒
+    target_time_str = '2024-10-02 21:54:00'
+    target_time = datetime.strptime(target_time_str, '%Y-%m-%d %H:%M:%S')
+    # 初始化一个很小的等待时间，以便循环能够运行
+    # 注意：在实际应用中，你可能不需要这个等待时间，因为这会导致不必要的延迟
+    # 但为了演示目的，我们保留它
+    wait_time = 0.3  # 秒
+    # 开始循环
+    while True:
+        # 获取当前时间，精确到秒
+        current_time = datetime.now()
+
+        # 计算时间差，得到timedelta对象
+        time_difference = current_time - target_time
+
+        # 将timedelta对象转换为秒数
+        seconds_difference = int(time_difference.total_seconds())
+        #print("seconds_difference:", seconds_difference)
+        print(seconds_difference % 300)
+        # 判断秒数是否可以被75整除（即相差一分十五秒的倍数）
+        if seconds_difference % 300 == 0:
+            print("当前时间与目标时间相差五分钟的倍数。")
+            break  # 退出循环
+        # 如果没有达到条件，则等待一段时间再检查
+        # 注意：这里的等待时间应该足够小，以便能够及时响应时间的变化
+        # 但也不能太小，以免消耗过多的CPU资源
+        time.sleep(wait_time)
+def copy(content_copy):
+    pyperclip.copy(content_copy)
+    # time.sleep(1)
+    pyautogui.hotkey('ctrl', 'v')
+import requests
+import time
+from threading import Lock
+lock11 = Lock()
+# 缓存变量
+def read_config(key):
+    from pathlib import Path
+
+
+    # 获取当前用户的桌面路径
+    #desktop_path = Path(os.path.join(os.path.expanduser("~"), "Desktop"))
+    # 拼接路径到weixin文件夹
+    #weixin_path = "tz_config_erzhuanjia.txt"
+    # 假设你要读取weixin文件夹下的config目录的内容（如果config是文件，这里需要调整）
+    config_path = "tz_config_erzhuanjia.txt"
+    print("config_path---->",config_path)
+    # 假设config是一个文件，读取其内容
+    if os.path.isfile(config_path):
+        with open(config_path, 'r', encoding='utf-8') as file:
+            #print("content---->",content)
+            for temp in file:
+                #print("temp---->",temp)
+                if ((temp.count(key) > 0) and (temp.count("=") > 0)):
+                    #print("key-------------->", key, str(temp).split("=")[1])
+                    return str(temp).split("=")[1]
+        return None
+    else:
+        print(f"{config_path} is not a file.")
+        return None
+def read_config_3(key):
+    from pathlib import Path
+
+
+    # 获取当前用户的桌面路径
+    #desktop_path = Path(os.path.join(os.path.expanduser("~"), "Desktop"))
+    # 拼接路径到weixin文件夹
+    #weixin_path = "tz_config_erzhuanjia.txt"
+    # 假设你要读取weixin文件夹下的config目录的内容（如果config是文件，这里需要调整）
+    config_path = "tz_config_erzhuanjia_3.txt"
+    print("config_path---->",config_path)
+    # 假设config是一个文件，读取其内容
+    if os.path.isfile(config_path):
+        with open(config_path, 'r', encoding='utf-8') as file:
+            #print("content---->",content)
+            for temp in file:
+                #print("temp---->",temp)
+                if ((temp.count(key) > 0) and (temp.count("=") > 0)):
+                    #print("key-------------->", key, str(temp).split("=")[1])
+                    return str(temp).split("=")[1]
+        return None
+    else:
+        print(f"{config_path} is not a file.")
+        return None
+def read_config_4(key):
+    from pathlib import Path
+
+
+    # 获取当前用户的桌面路径
+    #desktop_path = Path(os.path.join(os.path.expanduser("~"), "Desktop"))
+    # 拼接路径到weixin文件夹
+    #weixin_path = "tz_config_erzhuanjia.txt"
+    # 假设你要读取weixin文件夹下的config目录的内容（如果config是文件，这里需要调整）
+    config_path = "tz_config_erzhuanjia_4.txt"
+    print("config_path---->",config_path)
+    # 假设config是一个文件，读取其内容
+    if os.path.isfile(config_path):
+        with open(config_path, 'r', encoding='utf-8') as file:
+            #print("content---->",content)
+            for temp in file:
+                #print("temp---->",temp)
+                if ((temp.count(key) > 0) and (temp.count("=") > 0)):
+                    #print("key-------------->", key, str(temp).split("=")[1])
+                    return str(temp).split("=")[1]
+        return None
+    else:
+        print(f"{config_path} is not a file.")
+        return None
+def main_gui(path,touzhujine,shuzu,monidizhi,jiekoudizhi,zhuanjia,genfanzhuanjia,baochixianzhuang):
+    ex = ""
+    # path 浏览器路径配置  touzhujine：投注策略配置，shuzu:投注赛道，monidizhi：网址，jiekoudizhi：获取结果的接口地址,zhuanjia：选择的专家
+    thread111 = threading.Thread(target=main_tz,args=(path,touzhujine,shuzu,monidizhi,jiekoudizhi,ex,zhuanjia,genfanzhuanjia,baochixianzhuang))
+    thread111.start()
+
+def main_tz(path,touzhujine,shuzu,monidizhi,jiekoudizhi,ex,zhuanjia,genfanzhuanjia,baochixianzhuang):
+    print("path=",path)
+    print("touzhujine=", touzhujine)
+    print("shuzu=", shuzu)
+    print("monidizhi=", monidizhi)
+    print("jiekoudizhi=", jiekoudizhi)
+    print("ex=", ex)
+    print("zhuanjia=", zhuanjia)
+    print("genfanzhuanjia=", genfanzhuanjia)
+    print("baochixianzhuang=", baochixianzhuang)
+    saidaos = shuzu
+    driver = inter(path,monidizhi,ex)
+    if(os.path.isfile("shuju_jd.pkl")):
+        os.unlink("shuju_jd.pkl")
+    touzhujine = [int(item)  for item in touzhujine.split(',')]
+    userId = 132
+    rank = 1
+
+    if(zhuanjia == "力薄才疏"):
+        userId = 53
+    if (zhuanjia == "鲁班"):
+        userId = 50
+    if (zhuanjia == "惹不起"):
+        userId = 41
+    if (zhuanjia == "老表"):
+        userId = 45
+    if (zhuanjia == "肉白骨"):
+        userId = 52
+    if (zhuanjia == "嫩草"):
+        userId = 59
+
+    for saidao in saidaos:
+
+        if(saidao == "第1名"):
+            rank = 1
+        if (saidao == "第2名"):
+            rank = 2
+        if (saidao == "第3名"):
+            rank = 3
+        if (saidao == "第4名"):
+            rank = 4
+        if (saidao == "第5名"):
+            rank = 5
+        if (saidao == "第6名"):
+            rank = 6
+        if (saidao == "第7名"):
+            rank = 7
+        if (saidao == "第8名"):
+            rank = 8
+        if (saidao == "第9名"):
+            rank = 9
+        if (saidao == "第10名"):
+            rank = 10
+
+        thread = threading.Thread(target=jianshuo, args=(driver,touzhujine, rank,userId,len(saidaos),genfanzhuanjia,baochixianzhuang))
+        thread.start()
+        print("内")
+    print("专家二开始执行")
+    erzhuanjia_kaiguan = read_config("erzhuanjia_kaiguan").strip()
+    if(erzhuanjia_kaiguan == None):
+        erzhuanjia_kaiguan = "关"
+
+    if(erzhuanjia_kaiguan == "开"):
+
+        touzhujine = read_config("erzhuanjia_touzhu_jine").strip()
+        if (touzhujine == None):
+            touzhujine = "1,5,10,20,30,31"
+
+        shuzu = read_config("erzhuanjia_saidao").strip()
+        if (shuzu == None):
+            shuzu = "第1名,第2名,第3名,第4名,第5名"
+        shuzu = shuzu.split(",")
+
+        zhuanjia = read_config("erzhuanjia_name").strip()
+        if (zhuanjia == None):
+            zhuanjia = "力薄才疏"
+
+        genfanzhuanjia = read_config("erzhuanjia_genfan").strip()
+        if (genfanzhuanjia == None):
+            genfanzhuanjia = "跟专家"
+
+        baochixianzhuang = read_config("erzhuanjia_baochixianzhuang").strip()
+        if (baochixianzhuang == None):
+            baochixianzhuang = "保持现状"
+
+        print("erzhuanjia_kaiguan=", erzhuanjia_kaiguan)
+        print("touzhujine=", touzhujine)
+        print("shuzu=", shuzu)
+        print("zhuanjia=", zhuanjia)
+        print("genfanzhuanjia=", genfanzhuanjia)
+        print("baochixianzhuang=", baochixianzhuang)
+        saidaos = shuzu
+
+        touzhujine = [int(item) for item in touzhujine.split(',')]
+        userId = 132
+        rank = 1
+
+        if (zhuanjia == "力薄才疏"):
+            userId = 53
+        if (zhuanjia == "鲁班"):
+            userId = 50
+        if (zhuanjia == "惹不起"):
+            userId = 41
+        if (zhuanjia == "老表"):
+            userId = 45
+        if (zhuanjia == "肉白骨"):
+            userId = 52
+        if (zhuanjia == "嫩草"):
+            userId = 59
+
+        for saidao in saidaos:
+
+            if (saidao == "第1名"):
+                rank = 1
+            if (saidao == "第2名"):
+                rank = 2
+            if (saidao == "第3名"):
+                rank = 3
+            if (saidao == "第4名"):
+                rank = 4
+            if (saidao == "第5名"):
+                rank = 5
+            if (saidao == "第6名"):
+                rank = 6
+            if (saidao == "第7名"):
+                rank = 7
+            if (saidao == "第8名"):
+                rank = 8
+            if (saidao == "第9名"):
+                rank = 9
+            if (saidao == "第10名"):
+                rank = 10
+
+            thread = threading.Thread(target=jianshuo, args=(driver, touzhujine, rank, userId, len(saidaos), genfanzhuanjia, baochixianzhuang))
+            thread.start()
+
+    print("专家三开始执行")
+    erzhuanjia_kaiguan = read_config_3("erzhuanjia_kaiguan").strip()
+    if (erzhuanjia_kaiguan == None):
+        erzhuanjia_kaiguan = "关"
+
+    if (erzhuanjia_kaiguan == "开"):
+
+        touzhujine = read_config_3("erzhuanjia_touzhu_jine").strip()
+        if (touzhujine == None):
+            touzhujine = "1,5,10,20,30,31"
+
+        shuzu = read_config_3("erzhuanjia_saidao").strip()
+        if (shuzu == None):
+            shuzu = "第1名,第2名,第3名,第4名,第5名"
+        shuzu = shuzu.split(",")
+
+        zhuanjia = read_config_3("erzhuanjia_name").strip()
+        if (zhuanjia == None):
+            zhuanjia = "力薄才疏"
+
+        genfanzhuanjia = read_config_3("erzhuanjia_genfan").strip()
+        if (genfanzhuanjia == None):
+            genfanzhuanjia = "跟专家"
+
+        baochixianzhuang = read_config_3("erzhuanjia_baochixianzhuang").strip()
+        if (baochixianzhuang == None):
+            baochixianzhuang = "保持现状"
+
+        print("erzhuanjia_kaiguan=", erzhuanjia_kaiguan)
+        print("touzhujine=", touzhujine)
+        print("shuzu=", shuzu)
+        print("zhuanjia=", zhuanjia)
+        print("genfanzhuanjia=", genfanzhuanjia)
+        print("baochixianzhuang=", baochixianzhuang)
+        saidaos = shuzu
+
+        touzhujine = [int(item) for item in touzhujine.split(',')]
+        userId = 132
+        rank = 1
+
+        if (zhuanjia == "力薄才疏"):
+            userId = 53
+        if (zhuanjia == "鲁班"):
+            userId = 50
+        if (zhuanjia == "惹不起"):
+            userId = 41
+        if (zhuanjia == "老表"):
+            userId = 45
+        if (zhuanjia == "肉白骨"):
+            userId = 52
+        if (zhuanjia == "嫩草"):
+            userId = 59
+
+        for saidao in saidaos:
+
+            if (saidao == "第1名"):
+                rank = 1
+            if (saidao == "第2名"):
+                rank = 2
+            if (saidao == "第3名"):
+                rank = 3
+            if (saidao == "第4名"):
+                rank = 4
+            if (saidao == "第5名"):
+                rank = 5
+            if (saidao == "第6名"):
+                rank = 6
+            if (saidao == "第7名"):
+                rank = 7
+            if (saidao == "第8名"):
+                rank = 8
+            if (saidao == "第9名"):
+                rank = 9
+            if (saidao == "第10名"):
+                rank = 10
+
+            thread = threading.Thread(target=jianshuo, args=(
+            driver, touzhujine, rank, userId, len(saidaos), genfanzhuanjia, baochixianzhuang))
+            thread.start()
+
+    print("专家四开始执行")
+    erzhuanjia_kaiguan = read_config_4("erzhuanjia_kaiguan").strip()
+    if (erzhuanjia_kaiguan == None):
+        erzhuanjia_kaiguan = "关"
+
+    if (erzhuanjia_kaiguan == "开"):
+
+        touzhujine = read_config_4("erzhuanjia_touzhu_jine").strip()
+        if (touzhujine == None):
+            touzhujine = "1,5,10,20,30,31"
+
+        shuzu = read_config_4("erzhuanjia_saidao").strip()
+        if (shuzu == None):
+            shuzu = "第1名,第2名,第3名,第4名,第5名"
+        shuzu = shuzu.split(",")
+
+        zhuanjia = read_config_4("erzhuanjia_name").strip()
+        if (zhuanjia == None):
+            zhuanjia = "力薄才疏"
+
+        genfanzhuanjia = read_config_4("erzhuanjia_genfan").strip()
+        if (genfanzhuanjia == None):
+            genfanzhuanjia = "跟专家"
+
+        baochixianzhuang = read_config_4("erzhuanjia_baochixianzhuang").strip()
+        if (baochixianzhuang == None):
+            baochixianzhuang = "保持现状"
+
+        print("erzhuanjia_kaiguan=", erzhuanjia_kaiguan)
+        print("touzhujine=", touzhujine)
+        print("shuzu=", shuzu)
+        print("zhuanjia=", zhuanjia)
+        print("genfanzhuanjia=", genfanzhuanjia)
+        print("baochixianzhuang=", baochixianzhuang)
+        saidaos = shuzu
+
+        touzhujine = [int(item) for item in touzhujine.split(',')]
+        userId = 132
+        rank = 1
+
+        if (zhuanjia == "力薄才疏"):
+            userId = 53
+        if (zhuanjia == "鲁班"):
+            userId = 50
+        if (zhuanjia == "惹不起"):
+            userId = 41
+        if (zhuanjia == "老表"):
+            userId = 45
+        if (zhuanjia == "肉白骨"):
+            userId = 52
+        if (zhuanjia == "嫩草"):
+            userId = 59
+
+        for saidao in saidaos:
+
+            if (saidao == "第1名"):
+                rank = 1
+            if (saidao == "第2名"):
+                rank = 2
+            if (saidao == "第3名"):
+                rank = 3
+            if (saidao == "第4名"):
+                rank = 4
+            if (saidao == "第5名"):
+                rank = 5
+            if (saidao == "第6名"):
+                rank = 6
+            if (saidao == "第7名"):
+                rank = 7
+            if (saidao == "第8名"):
+                rank = 8
+            if (saidao == "第9名"):
+                rank = 9
+            if (saidao == "第10名"):
+                rank = 10
+
+            thread = threading.Thread(target=jianshuo, args=(
+                driver, touzhujine, rank, userId, len(saidaos), genfanzhuanjia, baochixianzhuang))
+            thread.start()
+
+    #jianshuo(touzhujine, temp["mingci"], leixing_flag, jiekoudizhi)
+
+# photo_path = photo()
+# alldata = ocr_processor.getAllData_test(photo_path)
+# dianjitouzhu(alldata,"冠军","da",2)
+#main_gui()
