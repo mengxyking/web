@@ -1253,6 +1253,43 @@ def take_screenshot(d, x1, y1, x2, y2):
         print("=" * 60)
         # ======================================================
         return None
+def take_screenshot(d, x1, y1, x2, y2):
+    """
+    根据坐标截图，不是截全屏
+    :param x1, y1: 左上角坐标
+    :param x2, y2: 右下角坐标
+    """
+    try:
+        import time
+        import os
+        import traceback  # 用于打印详细堆栈
+
+        SAVE_DIR = create_folder_on_current_disk()
+        timestamp = time.strftime("%Y%m%d%H%M%S")
+        save_path = os.path.join(SAVE_DIR, f"{timestamp}.png")
+
+        # 直接获取 PIL 图片
+        full_img = d.screenshot()
+
+        # 按坐标裁剪
+        cropped_img = full_img.crop((x1, y1, x2, y2))
+
+        # 保存
+        cropped_img.save(save_path)
+        print(f"区域截图已保存：{save_path}")
+        return save_path
+
+    except BaseException as e:
+        # ===================== 详细错误日志 =====================
+        print("=" * 60)
+        print("❌ 截图函数发生崩溃【详细日志】")
+        print(f"错误类型：{type(e).__name__}")
+        print(f"错误信息：{str(e)}")
+        print(f"错误堆栈：")
+        traceback.print_exc()  # 打印完整调用栈，精准定位哪行报错
+        print("=" * 60)
+        # ======================================================
+        return None
 
 
 # 支持的图片后缀
@@ -1756,7 +1793,7 @@ def main_douyin(serial):
                 #先点更多
                 last_more.click()
                 time.sleep(3)
-                if (d(text='申请开票').exists(timeout=3)):
+                if (1 == 1):
                     print("查看物流")
                     if (d(text='查看物流').exists(timeout=3)):
                         random_click_view(d, d(text='查看物流'))
@@ -1789,20 +1826,20 @@ def main_douyin(serial):
                 time.sleep(3)
                 time.sleep(random.randint(1, 3))
                 print("55")
-                if (d(text='申请开票').exists(timeout=3)):
-                    print("申请开票")
-                    print("77")
-                    random_click_view(d, d(text='申请开票'))
-                    time.sleep(random.randint(1, 3))
-                    result_info_tt = fapiao_tianxie(d, serial, result_info)
-                    if (str(result_info_tt).isdigit()):
+                if (1 == 1):
+                    # print("申请开票")
+                    # print("77")
+                    # random_click_view(d, d(text='申请开票'))
+                    # time.sleep(random.randint(1, 3))
+                    # result_info_tt = fapiao_tianxie(d, serial, result_info)
+                    if (2 == 1):
                         print("失败111")
-                    elif (len(result_info_tt) > 0):
+                    elif (1 == 1):
                         print("成功222")
-                        if (result_info_tt["订单编号"] != None):
+                        if (1 == 1):
                             back_to_orderList_long(d)
                             max_y = y  # 你可以改成你需要的数值
-                            xxxx, yyyy = result_info_tt["店铺中心坐标"]
+                            xxxx, yyyy = result_info["店铺中心坐标"]
 
                             click_x = xxxx + 200
                             click_y = yyyy + 150 + y - 700
@@ -1810,6 +1847,11 @@ def main_douyin(serial):
                             # 点击偏移后的位置
                             d.click(click_x, click_y)
                             time.sleep(3)
+
+                            path_photo = take_screenshot(d, 0, y - 850, w - 10, y - 100)
+                            ocr = get_available_ocr()
+                            all_data = ocr.yewu(path_photo)
+
                             take_screenshot_quan(d, image_path_phone, serial, class_phone, result_info_tt["订单编号"])
                     else:
                         print("失败")

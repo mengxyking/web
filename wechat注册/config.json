@@ -9,19 +9,7 @@
     "proxy_type": "socks5",
     "vpc_node": ""
   },
-  "devices": [
-    {
-      "container_name": "ALTMVB3B17005679",
-      "ip": "",
-      "host_ip": "ALTMVB3B17005679",
-      "port": 5555,
-      "api_port": 5555,
-      "rpa_port": 5555,
-      "instance_index": 1,
-      "host_index": 1,
-      "status": "在线"
-    }
-  ],
+  "devices": [],
   "scan_networks": [
     "192.168.11",
     "10.0.0",
