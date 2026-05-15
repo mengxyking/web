@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}行为日志{% endblock %}
+{% block page_title %}<i class="bi bi-journal-text me-2"></i>行为日志{% endblock %}
+
+{% block content %}
+
+{# ── 筛选栏 ── #}
+<div class="card mb-4">
+  <div class="card-body py-3">
+    <form method="get" class="d-flex gap-2 flex-wrap align-items-end">
+      <div>
+        <label class="form-label mb-1" style="font-size:.82rem;color:#6b7280">产品</label>
+        <select name="product_id" class="form-select form-select-sm" style="min-width:160px">
+          <option value="">全部产品</option>
+          {% for p in products %}
+          <option value="{{ p.id }}" {% if selected_product_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label mb-1" style="font-size:.82rem;color:#6b7280">操作人</label>
+        <select name="admin_id" class="form-select form-select-sm" style="min-width:140px">
+          <option value="">全部账号</option>
+          {% for a in admins %}
+          <option value="{{ a.id }}" {% if selected_admin_id == a.id %}selected{% endif %}>{{ a.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>筛选</button>
+        <a href="{{ url_for('admin.action_logs') }}" class="btn btn-sm btn-outline-secondary">重置</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── 日志列表 ── #}
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <div><i class="bi bi-list-ul me-2 text-primary"></i>操作记录</div>
+    <small class="text-muted">共 {{ logs.total }} 条</small>
+  </div>
+  <div class="card-body p-0">
+    {% if logs.items %}
+
+    {# Desktop table #}
+    <div class="table-responsive desktop-table">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th style="width:160px">时间</th>
+            <th style="width:120px">操作人</th>
+            <th style="width:140px">产品</th>
+            <th>操作详情</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs.items %}
+          <tr>
+            <td class="text-muted" style="font-size:.8rem;white-space:nowrap">
+              {{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            </td>
+            <td>
+              <span class="badge bg-secondary" style="font-size:.75rem">{{ log.admin.username }}</span>
+              {% if log.admin.is_super %}
+              <span class="badge bg-warning text-dark ms-1" style="font-size:.68rem">超管</span>
+              {% endif %}
+            </td>
+            <td style="font-size:.85rem">
+              {% if log.product %}
+                <span class="text-muted">{{ log.product.name }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td style="font-size:.85rem;word-break:break-all">{{ log.detail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Mobile cards #}
+    <div class="mobile-list px-3 py-2">
+      {% for log in logs.items %}
+      <div class="m-card">
+        <div class="m-card-row">
+          <span>时间</span>
+          <span style="font-size:.78rem">{{ log.created_at.strftime('%m-%d %H:%M:%S') }}</span>
+        </div>
+        <div class="m-card-row">
+          <span>操作人</span>
+          <span>
+            <span class="badge bg-secondary" style="font-size:.72rem">{{ log.admin.username }}</span>
+            {% if log.admin.is_super %}
+            <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem">超管</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="m-card-row">
+          <span>产品</span>
+          <span style="font-size:.82rem">{{ log.product.name if log.product else '—' }}</span>
+        </div>
+        <div class="m-card-row" style="align-items:flex-start">
+          <span style="flex-shrink:0">详情</span>
+          <span style="font-size:.8rem;word-break:break-all;text-align:right">{{ log.detail }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# 分页 #}
+    {% if logs.pages > 1 %}
+    <div class="d-flex justify-content-center py-3">
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          {% if logs.has_prev %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('admin.action_logs', page=logs.prev_num, product_id=selected_product_id or '', admin_id=selected_admin_id or '') }}">«</a>
+          </li>
+          {% endif %}
+          {% for p in logs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == logs.page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('admin.action_logs', page=p, product_id=selected_product_id or '', admin_id=selected_admin_id or '') }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+          {% endfor %}
+          {% if logs.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('admin.action_logs', page=logs.next_num, product_id=selected_product_id or '', admin_id=selected_admin_id or '') }}">»</a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-journal" style="font-size:2.5rem"></i>
+      <p class="mt-2 mb-0" style="font-size:.88rem">暂无操作记录</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

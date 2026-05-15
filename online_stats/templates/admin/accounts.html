@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}账号管理{% endblock %}
+{% block page_title %}<i class="bi bi-people me-2"></i>账号管理{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="text-muted" style="font-size:.85rem">共 {{ accounts|length }} 个账号</div>
+  <a href="{{ url_for('admin.add_account') }}" class="btn btn-sm btn-success">
+    <i class="bi bi-person-plus me-1"></i>添加账号
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if accounts %}
+
+    {# Desktop table #}
+    <div class="table-responsive desktop-table">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>用户名</th>
+            <th>角色</th>
+            <th>状态</th>
+            <th>创建时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for acc in accounts %}
+          <tr>
+            <td class="text-muted" style="font-size:.78rem">#{{ acc.id }}</td>
+            <td>
+              <i class="bi bi-person-circle me-1 text-muted"></i>
+              <strong>{{ acc.username }}</strong>
+            </td>
+            <td>
+              {% if acc.role == 'super' %}
+                <span class="badge bg-warning text-dark">超级管理员</span>
+              {% else %}
+                <span class="badge bg-secondary">普通管理员</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if acc.is_active %}<span class="badge bg-success">启用</span>
+              {% else %}<span class="badge bg-danger">禁用</span>{% endif %}
+            </td>
+            <td class="text-muted" style="font-size:.8rem">{{ acc.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>
+              <div class="d-flex gap-2">
+                {% if acc.role != 'super' %}
+                <a href="{{ url_for('admin.assign_products', account_id=acc.id) }}"
+                   class="btn btn-sm btn-outline-primary py-0">
+                  <i class="bi bi-box-seam me-1"></i>分配产品
+                </a>
+                {% endif %}
+                {% if acc.id != current_user.id %}
+                <form method="post" action="{{ url_for('admin.toggle_account', account_id=acc.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm py-0 {% if acc.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                    {% if acc.is_active %}<i class="bi bi-pause-circle me-1"></i>禁用
+                    {% else %}<i class="bi bi-play-circle me-1"></i>启用{% endif %}
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Mobile cards #}
+    <div class="mobile-list px-3 py-2">
+      {% for acc in accounts %}
+      <div class="m-card">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="m-card-title">
+            <i class="bi bi-person-circle me-1 text-muted"></i>{{ acc.username }}
+          </span>
+          {% if acc.is_active %}<span class="badge bg-success">启用</span>
+          {% else %}<span class="badge bg-danger">禁用</span>{% endif %}
+        </div>
+        <div class="m-card-row">
+          <span>角色</span>
+          <span>
+            {% if acc.role == 'super' %}
+              <span class="badge bg-warning text-dark">超级管理员</span>
+            {% else %}
+              <span class="badge bg-secondary">普通管理员</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="m-card-row"><span>创建时间</span><span>{{ acc.created_at.strftime('%Y-%m-%d') }}</span></div>
+        <div class="m-card-actions">
+          {% if acc.role != 'super' %}
+          <a href="{{ url_for('admin.assign_products', account_id=acc.id) }}"
+             class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-box-seam me-1"></i>分配产品
+          </a>
+          {% endif %}
+          {% if acc.id != current_user.id %}
+          <form method="post" action="{{ url_for('admin.toggle_account', account_id=acc.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm {% if acc.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+              {% if acc.is_active %}禁用{% else %}启用{% endif %}
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-people" style="font-size:2.5rem"></i>
+      <p class="mt-2">暂无账号</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

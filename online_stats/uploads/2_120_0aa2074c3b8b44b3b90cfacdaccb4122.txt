@@ -1,0 +1,189 @@
+# ============================================================
+# 全局自定义 Clash 配置模板
+# ============================================================
+#
+# 📖 功能说明：
+#   此模板允许你自定义 Clash 的配置，覆盖订阅的默认设置。
+#   - 节点信息（proxies）自动从订阅获取，无需在模板中定义
+#   - 你可以自定义：DNS、策略组、规则等配置
+#   - 支持部分覆盖：只写需要自定义的部分即可
+#
+# 🔄 DNS 配置优先级（重要）：
+#   软件 DNS 设置（覆盖开关）> 自定义模板 > 订阅配置
+#   - 如果模板中定义了 DNS，会完全替换订阅的 DNS
+#   - 如果开启了软件"覆盖 DNS"开关，模板的 DNS 不会生效
+#   - 建议：使用模板自定义 DNS 时，关闭软件的"覆盖 DNS"开关
+#
+# ⚠️ 重要提示：
+#   1. 如果你不熟悉 Clash 配置，请勿随意修改此模板！
+#   2. 错误的配置可能导致代理无法正常工作
+#   3. 如果出现问题，删除模板即可恢复使用订阅的默认配置
+#   4. 请勿在模板中定义 proxies、port、socks-port 等字段
+#
+# 💡 使用技巧：
+#   - 只想改规则？只保留 rules 部分即可
+#   - 只想改 DNS？只保留 dns 部分即可
+#   - 想要完整控制？保留下面所有配置
+#
+# 📝 占位符说明：
+#   - {{proxies}}         : 引用订阅的所有节点
+#   - {{proxies:香港}}    : 筛选包含"香港"的节点
+#   - {{proxies:HK}}      : 筛选包含"HK"的节点
+#   - 可以在策略组的 proxies 列表中使用这些占位符
+#
+# ============================================================
+
+# ==================== DNS 配置 ====================
+# 说明：配置 DNS 解析服务器，提升域名解析速度和准确性
+# 如果不需要自定义 DNS，可以删除整个 dns 部分
+
+dns:
+  enable: true                          # 启用 DNS
+  ipv6: false                           # 是否启用 IPv6 解析
+  listen: 0.0.0.0:1053                  # DNS 监听地址（无需修改）
+  enhanced-mode: fake-ip                # 增强模式：fake-ip 或 redir-host
+  fake-ip-range: 198.18.0.1/16          # fake-ip 地址池
+  fake-ip-filter:                       # fake-ip 过滤列表
+    - '*.lan'
+    - '*.4pd.io'
+    - localhost.ptlogin2.qq.com
+
+  default-nameserver:                   # 默认 DNS（用于解析 DoH 服务器域名）
+    - 223.5.5.5                         # 阿里 DNS
+    - 119.29.29.29                      # 腾讯 DNS
+
+  nameserver:                           # 主 DNS 服务器
+    - 10.100.6.100
+    - 10.100.26.76
+    - https://doh.pub/dns-query         # 腾讯 DoH
+    - https://dns.alidns.com/dns-query  # 阿里 DoH
+
+  fallback:                             # 备用 DNS（国外域名）
+    - https://dns.google/dns-query      # Google DoH
+    - https://cloudflare-dns.com/dns-query  # Cloudflare DoH
+
+  fallback-filter:                      # 备用 DNS 触发条件
+    geoip: true
+    geoip-code: CN
+    ipcidr:
+      - 240.0.0.0/4
+
+# ==================== 策略组配置 ====================
+# 说明：定义代理策略组，控制流量如何转发
+# 如果不需要自定义策略组，可以删除整个 proxy-groups 部分
+#
+# 策略组类型说明：
+#   - select: 手动选择节点
+#   - url-test: 自动选择延迟最低的节点
+#   - fallback: 按顺序选择可用节点
+#   - load-balance: 负载均衡
+#
+# ⚠️ 注意：策略组名称不要与订阅默认的冲突（建议使用 emoji 前缀）
+
+proxy-groups:
+  # 🚀 自动选择：自动测速，选择延迟最低的节点
+  - name: 🚀 自动选择
+    type: url-test
+    proxies:
+      - {{proxies}}                     # 引用所有订阅节点
+    url: http://www.gstatic.com/generate_204
+    interval: 300                       # 测速间隔（秒）
+
+  # 🇭🇰 香港节点：筛选香港节点
+  - name: 🇭🇰 香港节点
+    type: select
+    proxies:
+      - {{proxies:香港}}                # 筛选包含"香港"的节点
+      - {{proxies:HK}}                  # 筛选包含"HK"的节点
+      - DIRECT                          # 直连（不走代理）
+
+  # 🇺🇸 美国节点：筛选美国节点
+  - name: 🇺🇸 美国节点
+    type: select
+    proxies:
+      - {{proxies:美国}}                # 筛选包含"美国"的节点
+      - {{proxies:US}}                  # 筛选包含"US"的节点
+      - DIRECT
+
+  # 📺 流媒体：专门用于流媒体服务
+  - name: 📺 流媒体
+    type: select
+    proxies:
+      - 🇭🇰 香港节点                   # 引用上面定义的策略组
+      - 🇺🇸 美国节点
+      - 🚀 自动选择
+      - DIRECT
+
+  # 🔰 节点选择：手动选择模式
+  - name: 🔰 节点选择
+    type: select
+    proxies:
+      - 🚀 自动选择
+      - 🇭🇰 香港节点
+      - 🇺🇸 美国节点
+      - DIRECT
+      - {{proxies}}                     # 包含所有节点供手动选择
+
+  # 🌍 国际流量：默认的国际流量策略
+  - name: 🌍 国际流量
+    type: select
+    proxies:
+      - 🔰 节点选择
+      - 🚀 自动选择
+      - DIRECT
+
+# ==================== 规则配置 ====================
+# 说明：定义流量分流规则，决定哪些流量走代理，哪些直连
+# 如果不需要自定义规则，可以删除整个 rules 部分
+#
+# 规则类型说明：
+#   - DOMAIN-SUFFIX: 域名后缀匹配
+#   - DOMAIN-KEYWORD: 域名关键词匹配
+#   - GEOIP: 根据 IP 地理位置匹配
+#   - IP-CIDR: IP 地址段匹配
+#   - MATCH: 兜底规则（匹配所有剩余流量）
+#
+# ⚠️ 注意：规则从上到下匹配，匹配到第一条规则后就不再继续
+
+rules:
+  # 局域网地址直连（不走代理）
+  - DOMAIN-SUFFIX,4pd.io,DIRECT
+  
+  - DOMAIN-SUFFIX,local,DIRECT
+  - IP-CIDR,127.0.0.0/8,DIRECT
+  - IP-CIDR,172.16.0.0/12,DIRECT
+  - IP-CIDR,192.168.0.0/16,DIRECT
+  - IP-CIDR,10.0.0.0/8,DIRECT
+  
+  - IP-CIDR,10.0.0.0/8,DIRECT
+  - IP-CIDR,172.16.0.0/12,DIRECT
+  - IP-CIDR,192.168.0.0/16,DIRECT
+
+  # 流媒体服务使用专门的策略组
+  - DOMAIN-SUFFIX,netflix.com,📺 流媒体
+  - DOMAIN-SUFFIX,youtube.com,📺 流媒体
+  - DOMAIN-KEYWORD,youtube,📺 流媒体
+
+  # 中国大陆 IP 直连
+  - GEOIP,CN,DIRECT
+
+  # 其他所有国际流量走代理
+  - MATCH,🌍 国际流量
+
+# ============================================================
+# 📚 更多配置参考：
+#   https://github.com/Dreamacro/clash/wiki/configuration
+#
+# 💡 常见问题：
+#   Q: 保存后代理无法使用？
+#   A: 检查策略组名称是否与订阅冲突，建议使用 emoji 前缀
+#
+#   Q: 节点筛选不生效？
+#   A: 检查筛选关键词是否与节点名称匹配（区分大小写）
+#
+#   Q: 规则不生效？
+#   A: 检查规则语法是否正确，注意逗号分隔
+#
+#   Q: 想恢复默认配置？
+#   A: 删除此模板即可使用订阅的默认配置
+# ============================================================

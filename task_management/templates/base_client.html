@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e3a5f">
+  <title>{% block title %}任务平台{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --safe-top:    env(safe-area-inset-top,    0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left:   env(safe-area-inset-left,   0px);
+      --safe-right:  env(safe-area-inset-right,  0px);
+      --nav-h: 56px;
+      --primary: #2563eb;
+      --primary-dark: #1e3a5f;
+    }
+
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      background: #f0f4ff;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior-y: none;
+    }
+
+    /* ── Navbar ─────────────────────────────────────────────────────────── */
+    .topnav {
+      position: sticky; top: 0; z-index: 999;
+      height: calc(var(--nav-h) + var(--safe-top));
+      padding-top: var(--safe-top);
+      background: linear-gradient(90deg, var(--primary-dark) 0%, var(--primary) 100%);
+      box-shadow: 0 2px 10px rgba(37,99,235,.3);
+      display: flex; align-items: center;
+      padding-left: calc(1rem + var(--safe-left));
+      padding-right: calc(1rem + var(--safe-right));
+    }
+    .topnav .brand {
+      flex: 1; font-size: 1rem; font-weight: 700;
+      color: #fff; text-decoration: none; letter-spacing: .3px;
+    }
+    .topnav .user-label {
+      font-size: .8rem; color: rgba(255,255,255,.75);
+      margin-right: .75rem; max-width: 90px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .topnav .logout-btn {
+      color: rgba(255,255,255,.9); font-size: .82rem;
+      text-decoration: none; padding: .35rem .65rem;
+      border: 1px solid rgba(255,255,255,.3); border-radius: 1rem;
+      white-space: nowrap; transition: background .2s;
+    }
+    .topnav .logout-btn:hover { background: rgba(255,255,255,.15); }
+
+    /* ── Page wrapper ───────────────────────────────────────────────────── */
+    .page-wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1rem calc(1rem + var(--safe-left)) calc(1.5rem + var(--safe-bottom)) calc(1rem + var(--safe-right));
+    }
+
+    /* ── Cards ──────────────────────────────────────────────────────────── */
+    .card {
+      border: none; border-radius: .875rem;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    }
+    .card-header {
+      background: #fff; border-bottom: 1px solid #e8eef6;
+      font-weight: 600; font-size: .95rem;
+      border-radius: .875rem .875rem 0 0 !important;
+      padding: .875rem 1rem;
+    }
+
+    /* ── Flash messages ─────────────────────────────────────────────────── */
+    .flash-container {
+      padding: .75rem 1rem 0;
+      max-width: 900px; margin: 0 auto;
+    }
+
+    /* ── Buttons ────────────────────────────────────────────────────────── */
+    .btn { min-height: 44px; border-radius: .625rem; font-size: .9rem; }
+    .btn-sm { min-height: 36px; font-size: .82rem; }
+    .btn-xs { min-height: 30px; font-size: .78rem; padding: .2rem .6rem; }
+
+    /* ── Inputs ─────────────────────────────────────────────────────────── */
+    .form-control, .form-select {
+      min-height: 44px; border-radius: .625rem; font-size: .93rem;
+    }
+    .form-control:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 .2rem rgba(37,99,235,.18);
+    }
+
+    /* ── Badges ─────────────────────────────────────────────────────────── */
+    .badge { font-size: .78rem; padding: .35em .65em; border-radius: .4em; }
+
+    /* ── Scrollbar (desktop) ────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* ── Mobile table → card list ───────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .mobile-cards .table-head { display: none; }
+      .mobile-cards tbody tr {
+        display: block;
+        background: #fff; margin: 0 0 .75rem;
+        border-radius: .75rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,.08);
+        padding: .875rem 1rem;
+        border: none;
+      }
+      .mobile-cards tbody td {
+        display: flex; align-items: center;
+        padding: .2rem 0; border: none;
+        font-size: .88rem;
+      }
+      .mobile-cards tbody td::before {
+        content: attr(data-label);
+        color: #94a3b8; font-size: .78rem;
+        min-width: 70px; flex-shrink: 0;
+      }
+      .page-wrapper { padding-top: .75rem; }
+    }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<nav class="topnav">
+  <a class="brand" href="{{ url_for('client.tasks') }}">
+    <i class="bi bi-grid-3x3-gap-fill me-1"></i>任务平台
+  </a>
+  <span class="user-label">
+    <i class="bi bi-person-circle me-1"></i>{{ current_user.username }}
+  </span>
+  <a href="{{ url_for('client.logout') }}" class="logout-btn">
+    <i class="bi bi-box-arrow-right me-1"></i>退出
+  </a>
+</nav>
+{% endif %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-container">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show py-2 mb-2" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% block content %}{% endblock %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

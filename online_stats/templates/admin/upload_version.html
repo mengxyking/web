@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}上传版本 - {{ product.name }}{% endblock %}
+{% block page_title %}<i class="bi bi-cloud-upload me-2"></i>上传新版本{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem">
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.products') }}" class="text-success">产品管理</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.product_detail', product_id=product.id) }}" class="text-success">{{ product.name }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.versions', product_id=product.id) }}" class="text-success">版本管理</a></li>
+    <li class="breadcrumb-item active">上传新版本</li>
+  </ol>
+</nav>
+
+<div style="max-width:560px;width:100%">
+  <div class="card">
+    <div class="card-header"><i class="bi bi-cloud-upload me-2 text-success"></i>上传更新包</div>
+    <div class="card-body">
+      {% if error %}
+      <div class="alert alert-danger py-2" style="font-size:.88rem;border-radius:.625rem">
+        <i class="bi bi-exclamation-circle me-2"></i>{{ error }}
+      </div>
+      {% endif %}
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-3">
+          <label class="form-label fw-600">版本名称 <span class="text-danger">*</span></label>
+          <input type="text" name="version_name" class="form-control" required
+                 placeholder="例：1.2.0" maxlength="50">
+          <div class="form-text">展示给用户的版本字符串</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-600">版本号 <span class="text-danger">*</span></label>
+          <input type="number" name="version_code" class="form-control" required
+                 placeholder="例：120" min="1">
+          <div class="form-text">纯整数，用于客户端比较新旧（越大越新）</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-600">更新说明</label>
+          <textarea name="description" class="form-control" rows="3"
+                    placeholder="本次更新内容（选填）" maxlength="1000"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-600">安装包文件 <span class="text-danger">*</span></label>
+          <input type="file" name="file" class="form-control" required id="fileInput">
+          <div class="form-text" id="fileInfo">支持任意格式，最大 500 MB</div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-success flex-fill" style="min-height:44px" id="submitBtn">
+            <i class="bi bi-cloud-upload me-1"></i>开始上传
+          </button>
+          <a href="{{ url_for('admin.versions', product_id=product.id) }}"
+             class="btn btn-outline-secondary" style="min-height:44px">取消</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('fileInput').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const mb = (file.size / 1024 / 1024).toFixed(1);
+  document.getElementById('fileInfo').textContent = `已选择：${file.name}（${mb} MB）`;
+});
+document.querySelector('form').addEventListener('submit', function () {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>上传中，请稍候…';
+});
+</script>
+{% endblock %}

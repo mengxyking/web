@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理员登录 - TaskManager</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .login-card {
+      width: 100%; max-width: 420px;
+      background: #fff; border-radius: 1rem;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      overflow: hidden;
+    }
+    .login-header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      padding: 2rem; text-align: center; color: #fff;
+    }
+    .login-header .icon {
+      width: 64px; height: 64px;
+      background: rgba(255,255,255,.2);
+      border-radius: 50%; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 1.8rem; margin: 0 auto 1rem;
+    }
+    .login-header h4 { margin: 0; font-weight: 700; }
+    .login-header p { margin: .3rem 0 0; opacity: .8; font-size: .9rem; }
+    .login-body { padding: 2rem; }
+    .form-label { font-weight: 500; color: #374151; }
+    .form-control:focus { border-color: #2563eb; box-shadow: 0 0 0 .2rem rgba(37,99,235,.2); }
+    .btn-login {
+      width: 100%;
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      border: none; padding: .7rem; font-size: 1rem; font-weight: 500;
+      border-radius: .5rem; color: #fff;
+      transition: opacity .2s;
+    }
+    .btn-login:hover { opacity: .9; color: #fff; }
+    .security-tip {
+      background: #fef3c7; border: 1px solid #fde68a;
+      border-radius: .5rem; padding: .6rem .8rem;
+      font-size: .82rem; color: #92400e; margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="login-header">
+    <div class="icon"><i class="bi bi-shield-lock-fill"></i></div>
+    <h4>管理后台</h4>
+    <p>请使用管理员账号登录</p>
+  </div>
+  <div class="login-body">
+    {% if error %}
+      <div class="alert alert-danger d-flex align-items-center py-2" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('admin.login') }}" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-3">
+        <label class="form-label"><i class="bi bi-person me-1"></i>用户名</label>
+        <input type="text" name="username" class="form-control" placeholder="请输入用户名"
+               autocomplete="username" required>
+      </div>
+      <div class="mb-4">
+        <label class="form-label"><i class="bi bi-lock me-1"></i>密码</label>
+        <div class="input-group">
+          <input type="password" name="password" class="form-control" id="pwdInput"
+                 placeholder="请输入密码" autocomplete="current-password" required>
+          <button class="btn btn-outline-secondary" type="button" id="togglePwd">
+            <i class="bi bi-eye" id="eyeIcon"></i>
+          </button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-login">
+        <i class="bi bi-box-arrow-in-right me-1"></i>登录
+      </button>
+    </form>
+
+    <div class="security-tip">
+      <i class="bi bi-shield-check me-1"></i>
+      连续 5 次错误将锁定 5 分钟，请妥善保管账号密码。
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  document.getElementById('togglePwd').addEventListener('click', function () {
+    const input = document.getElementById('pwdInput');
+    const icon = document.getElementById('eyeIcon');
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.className = 'bi bi-eye-slash';
+    } else {
+      input.type = 'password';
+      icon.className = 'bi bi-eye';
+    }
+  });
+</script>
+</body>
+</html>

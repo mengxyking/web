@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API 接口文档 - 任务平台</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root { --primary: #2563eb; --primary-dark: #1e3a5f; }
+    body { background: #f8fafc; color: #1e293b; font-size: .93rem; }
+
+    .topbar {
+      background: linear-gradient(90deg, var(--primary-dark), var(--primary));
+      padding: .85rem 2rem; display: flex; align-items: center; gap: 1rem;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 8px rgba(37,99,235,.3);
+    }
+    .topbar .brand { color: #fff; font-weight: 700; font-size: 1rem; text-decoration: none; }
+    .topbar .sep   { color: rgba(255,255,255,.4); }
+    .topbar .sub   { color: rgba(255,255,255,.8); font-size: .88rem; }
+    .topbar .back  { color: rgba(255,255,255,.7); margin-left: auto; font-size: .82rem; text-decoration: none; }
+    .topbar .back:hover { color: #fff; }
+
+    .doc-wrap { display: flex; max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; gap: 1.5rem; }
+
+    .doc-nav {
+      width: 200px; flex-shrink: 0;
+      position: sticky; top: 56px; height: fit-content;
+    }
+    .doc-nav .nav-link {
+      color: #64748b; font-size: .85rem; padding: .3rem .75rem;
+      border-left: 2px solid transparent; border-radius: 0;
+    }
+    .doc-nav .nav-link:hover  { color: var(--primary); border-left-color: #bfdbfe; }
+    .doc-nav .nav-link.active { color: var(--primary); border-left-color: var(--primary); font-weight: 600; }
+    .doc-nav .nav-section {
+      font-size: .75rem; color: #94a3b8; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .05em;
+      padding: .75rem .75rem .2rem;
+    }
+
+    .doc-main { flex: 1; min-width: 0; }
+    .doc-section { margin-bottom: 2.5rem; }
+    .doc-section h2 {
+      font-size: 1.2rem; font-weight: 700; color: var(--primary-dark);
+      border-bottom: 2px solid #e2e8f0; padding-bottom: .5rem; margin-bottom: 1rem;
+    }
+    .doc-section h3 { font-size: 1rem; font-weight: 600; color: #334155; margin: 1.25rem 0 .5rem; }
+
+    .endpoint-card {
+      border: none; border-radius: .875rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07); margin-bottom: 1.5rem; overflow: hidden;
+    }
+    .endpoint-header {
+      background: #fff; padding: .875rem 1.25rem;
+      display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .method-badge {
+      font-size: .75rem; font-weight: 700; padding: .25em .6em;
+      border-radius: .35rem; letter-spacing: .03em;
+    }
+    .method-get  { background: #dcfce7; color: #166534; }
+    .endpoint-path { font-family: monospace; font-size: .92rem; color: #1e293b; font-weight: 600; }
+    .endpoint-desc { color: #64748b; font-size: .85rem; }
+    .endpoint-body { background: #fff; padding: 1rem 1.25rem; }
+
+    .param-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
+    .param-table th {
+      background: #f8fafc; color: #475569; font-weight: 600;
+      padding: .45rem .75rem; border: 1px solid #e2e8f0; text-align: left;
+    }
+    .param-table td { padding: .45rem .75rem; border: 1px solid #e2e8f0; vertical-align: top; }
+    .param-table tr:hover td { background: #fafafa; }
+    .tag-opt   { background: #f1f5f9; color: #475569; font-size: .72rem; padding: .1em .4em; border-radius: .25rem; }
+    .type-tag  { color: #7c3aed; font-size: .8rem; font-family: monospace; }
+
+    .code-wrap { position: relative; margin: .75rem 0; }
+    .code-wrap pre {
+      background: #0f172a; color: #e2e8f0; border-radius: .75rem;
+      padding: 1rem 1.25rem; font-size: .82rem; line-height: 1.6;
+      overflow-x: auto; margin: 0;
+    }
+    .copy-btn {
+      position: absolute; top: .5rem; right: .5rem;
+      background: rgba(255,255,255,.1); border: none; color: #94a3b8;
+      border-radius: .375rem; padding: .2rem .5rem; font-size: .75rem; cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    .copy-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+
+    .info-block {
+      background: #eff6ff; border-left: 3px solid #3b82f6;
+      border-radius: 0 .5rem .5rem 0; padding: .65rem 1rem;
+      font-size: .85rem; color: #1e40af; margin: .75rem 0;
+    }
+    .status-ok  { color: #166534; font-weight: 600; }
+    .status-err { color: #991b1b; font-weight: 600; }
+    .key-pill {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: #f1f5f9; border: 1px solid #e2e8f0;
+      border-radius: .5rem; padding: .3rem .75rem;
+      font-family: monospace; font-size: .85rem; color: #475569;
+    }
+
+    @media (max-width: 768px) {
+      .doc-nav  { display: none; }
+      .doc-wrap { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" class="brand"><i class="bi bi-grid-3x3-gap-fill me-1"></i>任务平台</a>
+  <span class="sep">/</span>
+  <span class="sub">API 接口文档</span>
+  <a href="/" class="back"><i class="bi bi-arrow-left me-1"></i>返回首页</a>
+</div>
+
+<div class="doc-wrap">
+
+  <!-- ── Sidebar ── -->
+  <nav class="doc-nav">
+    <div class="nav-section">概览</div>
+    <a class="nav-link active" href="#overview">介绍</a>
+    <a class="nav-link" href="#base-url">Base URL</a>
+    <a class="nav-link" href="#response">响应格式</a>
+    <a class="nav-link" href="#errors">错误码</a>
+    <div class="nav-section mt-2">接口列表</div>
+    <a class="nav-link" href="#get-tasks">获取任务列表</a>
+    <div class="nav-section mt-2">其他</div>
+    <a class="nav-link" href="#examples">调用示例</a>
+  </nav>
+
+  <!-- ── Main ── -->
+  <main class="doc-main">
+
+    <!-- 介绍 -->
+    <section class="doc-section" id="overview">
+      <h2><i class="bi bi-book me-2"></i>介绍</h2>
+      <p>任务平台开放 API，供第三方系统查询任务数据。所有接口均返回 JSON 格式，无需鉴权，直接调用即可。</p>
+      <div class="info-block">
+        <i class="bi bi-info-circle me-1"></i>
+        当前版本：<strong>v1</strong> &nbsp;·&nbsp; 请求编码：<strong>UTF-8</strong>
+      </div>
+    </section>
+
+    <!-- Base URL -->
+    <section class="doc-section" id="base-url">
+      <h2><i class="bi bi-link-45deg me-2"></i>Base URL</h2>
+      <div class="key-pill"><i class="bi bi-server"></i>http://localhost:5000/api</div>
+      <p class="mt-2 text-muted" style="font-size:.85rem">
+        生产环境请替换为实际部署地址，所有接口路径均以 <code>/api</code> 为前缀。
+      </p>
+    </section>
+
+    <!-- 响应格式 -->
+    <section class="doc-section" id="response">
+      <h2><i class="bi bi-braces me-2"></i>响应格式</h2>
+      <p>所有接口统一返回以下 JSON 结构：</p>
+      <div class="code-wrap">
+        <pre>{
+  "code":    0,          // 0 = 成功，非 0 = 失败
+  "message": "success", // 提示信息
+  "data":    { ... }    // 业务数据，失败时为 null
+}</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+    </section>
+
+    <!-- 错误码 -->
+    <section class="doc-section" id="errors">
+      <h2><i class="bi bi-x-octagon me-2"></i>错误码</h2>
+      <table class="param-table">
+        <thead><tr><th>code</th><th>HTTP 状态码</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="status-ok">0</td><td>200</td><td>成功</td></tr>
+          <tr><td class="status-err">400</td><td>400</td><td>请求参数错误</td></tr>
+          <tr><td class="status-err">500</td><td>500</td><td>服务器内部错误</td></tr>
+        </tbody>
+      </table>
+      <h3>错误响应示例</h3>
+      <div class="code-wrap">
+        <pre>{
+  "code":    400,
+  "message": "status 参数无效，可选值：pending / processing / completed / failed",
+  "data":    null
+}</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+    </section>
+
+    <!-- 接口：获取任务列表 -->
+    <section class="doc-section" id="get-tasks">
+      <h2><i class="bi bi-list-task me-2"></i>获取任务列表</h2>
+
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <span class="method-badge method-get">GET</span>
+          <span class="endpoint-path">/api/v1/tasks</span>
+          <span class="endpoint-desc">获取全部任务，按创建时间倒序排列</span>
+        </div>
+        <div class="endpoint-body">
+
+          <h3>请求参数</h3>
+          <table class="param-table">
+            <thead>
+              <tr><th>参数名</th><th>类型</th><th>必填</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>page</code></td>
+                <td class="type-tag">integer</td>
+                <td><span class="tag-opt">可选</span></td>
+                <td>1</td>
+                <td>页码，从 1 开始</td>
+              </tr>
+              <tr>
+                <td><code>per_page</code></td>
+                <td class="type-tag">integer</td>
+                <td><span class="tag-opt">可选</span></td>
+                <td>20</td>
+                <td>每页条数，最大 100</td>
+              </tr>
+              <tr>
+                <td><code>status</code></td>
+                <td class="type-tag">string</td>
+                <td><span class="tag-opt">可选</span></td>
+                <td>—</td>
+                <td>状态筛选：<code>pending</code> / <code>processing</code> / <code>completed</code> / <code>failed</code></td>
+              </tr>
+              <tr>
+                <td><code>phone</code></td>
+                <td class="type-tag">string</td>
+                <td><span class="tag-opt">可选</span></td>
+                <td>—</td>
+                <td>手机号模糊搜索</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>请求示例</h3>
+          <div class="code-wrap">
+            <pre>GET /api/v1/tasks?page=1&amp;per_page=20</pre>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <div class="code-wrap">
+            <pre># 筛选"处理中"状态，按手机号搜索
+GET /api/v1/tasks?status=processing&amp;phone=138</pre>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+
+          <h3>成功响应</h3>
+          <div class="code-wrap">
+            <pre>{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "id":            42,
+        "phone":         "13800138000",
+        "status":        "pending",
+        "status_label":  "待处理",
+        "execute_phone": null,
+        "account":       "user_a",
+        "created_at":    "2026-05-12 14:30:00",
+        "updated_at":    "2026-05-12 14:30:00"
+      },
+      {
+        "id":            41,
+        "phone":         "13900139000",
+        "status":        "completed",
+        "status_label":  "已完成",
+        "execute_phone": "13700137000",
+        "account":       "user_b",
+        "created_at":    "2026-05-12 13:20:00",
+        "updated_at":    "2026-05-12 14:00:00"
+      }
+    ],
+    "pagination": {
+      "total":    42,
+      "page":     1,
+      "per_page": 20,
+      "pages":    3,
+      "has_prev": false,
+      "has_next": true
+    }
+  }
+}</pre>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+
+          <h3>字段说明</h3>
+          <table class="param-table">
+            <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><code>id</code></td><td class="type-tag">integer</td><td>任务编号</td></tr>
+              <tr><td><code>phone</code></td><td class="type-tag">string</td><td>任务手机号</td></tr>
+              <tr><td><code>status</code></td><td class="type-tag">string</td><td>pending / processing / completed / failed</td></tr>
+              <tr><td><code>status_label</code></td><td class="type-tag">string</td><td>状态中文：待处理 / 处理中 / 已完成 / 失败</td></tr>
+              <tr><td><code>execute_phone</code></td><td class="type-tag">string | null</td><td>执行手机号，未分配时为 null</td></tr>
+              <tr><td><code>account</code></td><td class="type-tag">string</td><td>提交任务的账号用户名</td></tr>
+              <tr><td><code>created_at</code></td><td class="type-tag">string</td><td>创建时间 YYYY-MM-DD HH:mm:ss</td></tr>
+              <tr><td><code>updated_at</code></td><td class="type-tag">string</td><td>最后更新时间</td></tr>
+            </tbody>
+          </table>
+          <table class="param-table mt-3">
+            <thead><tr><th>分页字段</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><code>total</code></td><td class="type-tag">integer</td><td>总条数</td></tr>
+              <tr><td><code>page</code></td><td class="type-tag">integer</td><td>当前页码</td></tr>
+              <tr><td><code>per_page</code></td><td class="type-tag">integer</td><td>每页条数</td></tr>
+              <tr><td><code>pages</code></td><td class="type-tag">integer</td><td>总页数</td></tr>
+              <tr><td><code>has_prev</code></td><td class="type-tag">boolean</td><td>是否有上一页</td></tr>
+              <tr><td><code>has_next</code></td><td class="type-tag">boolean</td><td>是否有下一页</td></tr>
+            </tbody>
+          </table>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- 调用示例 -->
+    <section class="doc-section" id="examples">
+      <h2><i class="bi bi-terminal me-2"></i>调用示例</h2>
+
+      <h3>cURL</h3>
+      <div class="code-wrap">
+        <pre>curl "http://localhost:5000/api/v1/tasks?page=1&per_page=20"</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+
+      <h3>Python (requests)</h3>
+      <div class="code-wrap">
+        <pre>import requests
+
+resp = requests.get(
+    "http://localhost:5000/api/v1/tasks",
+    params={"page": 1, "per_page": 20}
+)
+data = resp.json()
+
+if data["code"] == 0:
+    for task in data["data"]["list"]:
+        print(task["id"], task["phone"], task["status_label"])</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+
+      <h3>JavaScript (fetch)</h3>
+      <div class="code-wrap">
+        <pre>const resp = await fetch('/api/v1/tasks?page=1&per_page=20');
+const { code, data } = await resp.json();
+
+if (code === 0) {
+  console.log('total:', data.pagination.total);
+  data.list.forEach(t => console.log(t.id, t.phone, t.status_label));
+}</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  function copyCode(btn) {
+    const text = btn.previousElementSibling.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '已复制';
+      setTimeout(() => { btn.textContent = '复制'; }, 1500);
+    });
+  }
+
+  const sections = document.querySelectorAll('.doc-section[id]');
+  const navLinks  = document.querySelectorAll('.doc-nav .nav-link');
+  const observer  = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting)
+        navLinks.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

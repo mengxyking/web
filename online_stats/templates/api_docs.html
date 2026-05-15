@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API 接口文档 - OnlineStats</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root { --primary: #0f766e; --dark: #134e4a; }
+    body { background: #f0fdf9; font-size: .93rem; }
+    .topbar {
+      background: linear-gradient(90deg, var(--dark), var(--primary));
+      padding: .85rem 2rem; display: flex; align-items: center; gap: 1rem;
+      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(15,118,110,.3);
+    }
+    .topbar .brand { color: #fff; font-weight: 700; font-size: 1rem; text-decoration: none; }
+    .topbar .sep   { color: rgba(255,255,255,.4); }
+    .topbar .sub   { color: rgba(255,255,255,.8); font-size: .88rem; }
+    .topbar .back  { color: rgba(255,255,255,.7); margin-left: auto; font-size: .82rem; text-decoration: none; }
+    .topbar .back:hover { color: #fff; }
+    .doc-wrap { display: flex; max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; gap: 1.5rem; }
+    .doc-nav { width: 200px; flex-shrink: 0; position: sticky; top: 56px; height: fit-content; }
+    .doc-nav .nav-link { color: #64748b; font-size: .85rem; padding: .3rem .75rem; border-left: 2px solid transparent; border-radius: 0; }
+    .doc-nav .nav-link:hover  { color: var(--primary); border-left-color: #6ee7b7; }
+    .doc-nav .nav-link.active { color: var(--primary); border-left-color: var(--primary); font-weight: 600; }
+    .doc-nav .nav-section { font-size: .75rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; padding: .75rem .75rem .2rem; }
+    .doc-main { flex: 1; min-width: 0; }
+    .doc-section { margin-bottom: 2.5rem; }
+    .doc-section h2 { font-size: 1.15rem; font-weight: 700; color: var(--dark); border-bottom: 2px solid #d1fae5; padding-bottom: .5rem; margin-bottom: 1rem; }
+    .doc-section h3 { font-size: .95rem; font-weight: 600; color: #334155; margin: 1.25rem 0 .5rem; }
+    .endpoint-card { border: none; border-radius: .875rem; box-shadow: 0 1px 4px rgba(0,0,0,.07); margin-bottom: 1.5rem; overflow: hidden; }
+    .endpoint-header { background: #fff; padding: .875rem 1.25rem; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; border-bottom: 1px solid #f0fdf9; }
+    .method-post { background: #dbeafe; color: #1e40af; font-size: .75rem; font-weight: 700; padding: .25em .6em; border-radius: .35rem; }
+    .method-get  { background: #dcfce7; color: #166534; font-size: .75rem; font-weight: 700; padding: .25em .6em; border-radius: .35rem; }
+    .endpoint-path { font-family: monospace; font-size: .92rem; font-weight: 600; color: #1e293b; }
+    .endpoint-body { background: #fff; padding: 1rem 1.25rem; }
+    .param-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
+    .param-table th { background: #f0fdf9; color: #475569; font-weight: 600; padding: .45rem .75rem; border: 1px solid #d1fae5; text-align: left; }
+    .param-table td { padding: .45rem .75rem; border: 1px solid #d1fae5; vertical-align: top; }
+    .tag-req { background: #fee2e2; color: #991b1b; font-size: .72rem; padding: .1em .4em; border-radius: .25rem; }
+    .tag-opt { background: #f1f5f9; color: #475569; font-size: .72rem; padding: .1em .4em; border-radius: .25rem; }
+    .type-tag { color: #7c3aed; font-size: .8rem; font-family: monospace; }
+    .code-wrap { position: relative; margin: .75rem 0; }
+    .code-wrap pre { background: #0f172a; color: #e2e8f0; border-radius: .75rem; padding: 1rem 1.25rem; font-size: .82rem; line-height: 1.6; overflow-x: auto; margin: 0; }
+    .copy-btn { position: absolute; top: .5rem; right: .5rem; background: rgba(255,255,255,.1); border: none; color: #94a3b8; border-radius: .375rem; padding: .2rem .5rem; font-size: .75rem; cursor: pointer; }
+    .copy-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+    .info-block { background: #f0fdf9; border-left: 3px solid #0f766e; border-radius: 0 .5rem .5rem 0; padding: .65rem 1rem; font-size: .85rem; color: #065f46; margin: .75rem 0; }
+    .status-ok  { color: #166534; font-weight: 600; }
+    .status-err { color: #991b1b; font-weight: 600; }
+    @media (max-width: 768px) { .doc-nav { display: none; } .doc-wrap { padding: 1rem; } }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/admin/dashboard" class="brand"><i class="bi bi-activity me-1"></i>OnlineStats</a>
+  <span class="sep">/</span>
+  <span class="sub">API 接口文档</span>
+  <a href="/admin/dashboard" class="back"><i class="bi bi-arrow-left me-1"></i>返回后台</a>
+</div>
+
+<div class="doc-wrap">
+  <nav class="doc-nav">
+    <div class="nav-section">概览</div>
+    <a class="nav-link active" href="#overview">介绍</a>
+    <a class="nav-link" href="#base-url">Base URL</a>
+    <a class="nav-link" href="#response">响应格式</a>
+    <a class="nav-link" href="#errors">错误码</a>
+    <div class="nav-section mt-2">接口列表</div>
+    <a class="nav-link" href="#heartbeat">上报心跳</a>
+    <a class="nav-link" href="#device-status">设备禁用/到期说明</a>
+    <a class="nav-link" href="#stats">查询统计</a>
+    <div class="nav-section mt-2">其他</div>
+    <a class="nav-link" href="#examples">调用示例</a>
+  </nav>
+
+  <main class="doc-main">
+
+    <section class="doc-section" id="overview">
+      <h2><i class="bi bi-book me-2"></i>介绍</h2>
+      <p>OnlineStats 开放 API，用于上报设备在线状态并查询统计数据。无需鉴权，直接调用。</p>
+      <div class="info-block">
+        <i class="bi bi-info-circle me-1"></i>
+        <strong>核心逻辑：</strong>每次调用心跳接口，系统自动注册设备并记录当日在线（同一设备当天仅计一次）。
+        统计维度：<strong>产品 → 电脑设备 → 手机设备</strong>
+      </div>
+    </section>
+
+    <section class="doc-section" id="base-url">
+      <h2><i class="bi bi-link-45deg me-2"></i>Base URL</h2>
+      <code style="background:#f0fdf9;padding:.3rem .75rem;border-radius:.5rem;color:#065f46">
+        http://localhost:5001/api
+      </code>
+    </section>
+
+    <section class="doc-section" id="response">
+      <h2><i class="bi bi-braces me-2"></i>响应格式</h2>
+      <div class="code-wrap">
+        <pre>{
+  "code":    0,          // 0 = 成功，非 0 = 失败
+  "message": "success",
+  "data":    { ... }    // 失败时为 null
+}</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+    </section>
+
+    <section class="doc-section" id="errors">
+      <h2><i class="bi bi-x-octagon me-2"></i>错误码</h2>
+      <table class="param-table">
+        <thead><tr><th>code</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="status-ok">0</td><td>成功</td></tr>
+          <tr><td class="status-err">400</td><td>参数缺失或格式错误</td></tr>
+          <tr><td class="status-err">403</td><td>电脑设备已禁用或授权已过期</td></tr>
+          <tr><td class="status-err">404</td><td>产品不存在或已禁用</td></tr>
+          <tr><td class="status-err">500</td><td>服务器内部错误</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 心跳接口 -->
+    <section class="doc-section" id="heartbeat">
+      <h2><i class="bi bi-heart-pulse me-2"></i>上报在线心跳</h2>
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <span class="method-post">POST</span>
+          <span class="endpoint-path">/api/v1/heartbeat</span>
+          <span class="text-muted" style="font-size:.85rem">设备上线时调用，自动注册设备并计入当日在线</span>
+        </div>
+        <div class="endpoint-body">
+          <h3>请求体（JSON）</h3>
+          <table class="param-table">
+            <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>product_key</code></td>
+                <td class="type-tag">string</td>
+                <td><span class="tag-req">必填</span></td>
+                <td>产品 Key，在后台「产品管理」中复制</td>
+              </tr>
+              <tr>
+                <td><code>computer_code</code></td>
+                <td class="type-tag">string</td>
+                <td><span class="tag-req">必填</span></td>
+                <td>电脑设备唯一标识码（如机器码、MAC地址等）</td>
+              </tr>
+              <tr>
+                <td><code>phone_code</code></td>
+                <td class="type-tag">string</td>
+                <td><span class="tag-req">必填</span></td>
+                <td>手机设备唯一标识码（如IMEI、设备序列号等）</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>请求示例</h3>
+          <div class="code-wrap">
+            <pre>POST /api/v1/heartbeat
+Content-Type: application/json
+
+{
+  "product_key":   "pk_a1b2c3d4e5f6...",
+  "computer_code": "COMP-MAC-AA:BB:CC:DD:EE:FF",
+  "phone_code":    "PHONE-IMEI-123456789012345"
+}</pre>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+
+          <h3>成功响应</h3>
+          <div class="code-wrap">
+            <pre>{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "product":          "我的产品",
+    "date":             "2026-05-14",
+    "computer_code":    "COMP-MAC-AA:BB:CC:DD:EE:FF",
+    "computer_status":  "active",
+    "total":            2,
+    "new_phones":       0,
+    "new_computer":     false,
+    "phone_statuses": {
+      "PHONE-IMEI-001": "active",
+      "PHONE-IMEI-002": "disabled"
+    }
+  }
+}</pre>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+
+          <h3>字段说明</h3>
+          <table class="param-table">
+            <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><code>product</code></td><td class="type-tag">string</td><td>产品名称</td></tr>
+              <tr><td><code>date</code></td><td class="type-tag">string</td><td>统计日期</td></tr>
+              <tr><td><code>computer_code</code></td><td class="type-tag">string</td><td>电脑设备码（原样返回）</td></tr>
+              <tr><td><code>computer_status</code></td><td class="type-tag">string</td><td><code>active</code> — 正常；电脑被禁用时直接返回 403</td></tr>
+              <tr><td><code>total</code></td><td class="type-tag">int</td><td>本次上报的手机设备数量</td></tr>
+              <tr><td><code>new_phones</code></td><td class="type-tag">int</td><td>本次首次注册的手机数</td></tr>
+              <tr><td><code>new_computer</code></td><td class="type-tag">boolean</td><td>是否首次注册的电脑设备</td></tr>
+              <tr><td><code>phone_statuses</code></td><td class="type-tag">object</td><td>每台手机的状态：<code>active</code>（正常）、<code>disabled</code>（已禁用）、<code>expired</code>（授权已过期）</td></tr>
+            </tbody>
+          </table>
+
+          <div class="info-block mt-3">
+            <i class="bi bi-repeat me-1"></i>
+            <strong>幂等性：</strong>同一设备组合当天多次调用只计一次在线，不会重复统计。建议客户端每隔 5 分钟调用一次作为心跳保活。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 设备禁用/到期说明 -->
+    <section class="doc-section" id="device-status">
+      <h2><i class="bi bi-slash-circle me-2"></i>设备禁用 / 授权到期说明</h2>
+      <div class="info-block">
+        <i class="bi bi-info-circle me-1"></i>
+        管理员可对电脑/手机设备执行<strong>禁用</strong>操作，并可设置<strong>有效期</strong>（默认首次上线后 5 天试用期）。超期或被禁用的设备心跳请求将受到限制。
+      </div>
+
+      <h3>电脑设备被禁用</h3>
+      <p style="font-size:.88rem">当上报的 <code>computer_code</code> 对应电脑已被禁用时，接口直接返回 <code>403</code>：</p>
+      <div class="code-wrap">
+        <pre>{ "code": 403, "message": "电脑设备已禁用", "data": null }</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+
+      <h3>电脑设备授权已过期</h3>
+      <p style="font-size:.88rem">当电脑设备超过有效期（未设置则为首次上线后第 5 天）时，接口直接返回 <code>403</code>：</p>
+      <div class="code-wrap">
+        <pre>{ "code": 403, "message": "电脑设备授权已过期", "data": null }</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+      <p style="font-size:.88rem">客户端收到 <code>403</code> 后应停止重试并提示用户联系管理员。</p>
+
+      <h3>手机设备被禁用或已过期</h3>
+      <p style="font-size:.88rem">当 <code>phone_codes</code> 中部分手机被禁用或授权过期时，接口仍返回 <code>200</code>，但 <code>phone_statuses</code> 中对应手机的值为 <code>"disabled"</code> 或 <code>"expired"</code>，且该手机不会计入当日在线统计：</p>
+      <div class="code-wrap">
+        <pre>{
+  "code": 0,
+  "message": "success",
+  "data": {
+    ...
+    "phone_statuses": {
+      "PHONE-IMEI-001": "active",
+      "PHONE-IMEI-002": "disabled",
+      "PHONE-IMEI-003": "expired"
+    }
+  }
+}</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+      <p style="font-size:.88rem">客户端应根据 <code>phone_statuses</code> 中各手机的状态决定是否为对应设备提供服务。</p>
+
+      <h3>有效期规则</h3>
+      <table class="param-table">
+        <thead><tr><th>情况</th><th>有效期</th></tr></thead>
+        <tbody>
+          <tr><td>未设置有效期（默认试用）</td><td>首次上线日期 + 5 天</td></tr>
+          <tr><td>管理员已设置有效期</td><td>以设置日期为准</td></tr>
+          <tr><td>管理员清除有效期</td><td>恢复为首次上线 + 5 天试用期</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 统计接口 -->
+    <section class="doc-section" id="stats">
+      <h2><i class="bi bi-bar-chart me-2"></i>查询今日统计</h2>
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <span class="method-get">GET</span>
+          <span class="endpoint-path">/api/v1/stats</span>
+          <span class="text-muted" style="font-size:.85rem">查询今日在线汇总数据</span>
+        </div>
+        <div class="endpoint-body">
+          <h3>Query 参数</h3>
+          <table class="param-table">
+            <thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>product_key</code></td>
+                <td class="type-tag">string</td>
+                <td><span class="tag-opt">可选</span></td>
+                <td>不传则返回全平台汇总，传则只返回该产品数据</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>响应示例</h3>
+          <div class="code-wrap">
+            <pre>{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "date":             "2026-05-12",
+    "computers_online": 15,
+    "phones_online":    42
+  }
+}</pre>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 调用示例 -->
+    <section class="doc-section" id="examples">
+      <h2><i class="bi bi-terminal me-2"></i>调用示例</h2>
+
+      <h3>cURL</h3>
+      <div class="code-wrap">
+        <pre>curl -X POST http://localhost:5001/api/v1/heartbeat \
+     -H "Content-Type: application/json" \
+     -d '{"product_key":"pk_xxx","computer_code":"COMP-001","phone_code":"PHONE-001"}'</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+
+      <h3>Python (requests)</h3>
+      <div class="code-wrap">
+        <pre>import requests
+import time
+
+def heartbeat(product_key, computer_code, phone_code):
+    resp = requests.post(
+        "http://localhost:5001/api/v1/heartbeat",
+        json={
+            "product_key":   product_key,
+            "computer_code": computer_code,
+            "phone_code":    phone_code,
+        },
+        timeout=10
+    )
+    return resp.json()
+
+# 每 5 分钟上报一次
+while True:
+    result = heartbeat("pk_xxx", "COMP-001", "PHONE-001")
+    print(result)
+    time.sleep(300)</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+
+      <h3>JavaScript (fetch)</h3>
+      <div class="code-wrap">
+        <pre>async function heartbeat(productKey, computerCode, phoneCode) {
+  const resp = await fetch('/api/v1/heartbeat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      product_key:   productKey,
+      computer_code: computerCode,
+      phone_code:    phoneCode,
+    })
+  });
+  return resp.json();
+}
+
+// 调用示例
+heartbeat('pk_xxx', 'COMP-001', 'PHONE-001').then(console.log);</pre>
+        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  function copyCode(btn) {
+    navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(() => {
+      btn.textContent = '已复制';
+      setTimeout(() => btn.textContent = '复制', 1500);
+    });
+  }
+  const sections = document.querySelectorAll('.doc-section[id]');
+  const links    = document.querySelectorAll('.doc-nav .nav-link');
+  new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting)
+        links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' }).observe(...sections);
+  sections.forEach(s => new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting)
+        links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' }).observe(s));
+</script>
+</body>
+</html>

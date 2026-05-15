@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}版本管理 - {{ product.name }}{% endblock %}
+{% block page_title %}<i class="bi bi-cloud-arrow-up me-2"></i>版本管理{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem">
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.products') }}" class="text-success">产品管理</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.product_detail', product_id=product.id) }}" class="text-success">{{ product.name }}</a></li>
+    <li class="breadcrumb-item active">版本管理</li>
+  </ol>
+</nav>
+
+{# 产品信息 #}
+<div class="card mb-4 p-3">
+  <div class="d-flex align-items-center gap-3">
+    <div style="width:44px;height:44px;flex-shrink:0;background:linear-gradient(135deg,#134e4a,#0d9488);
+                border-radius:.75rem;display:flex;align-items:center;justify-content:center">
+      <i class="bi bi-box-seam text-white"></i>
+    </div>
+    <div class="flex-grow-1">
+      <div class="fw-700">{{ product.name }}</div>
+      <div style="font-size:.78rem;color:#6b7280">共 {{ versions|length }} 个版本</div>
+    </div>
+    <a href="{{ url_for('admin.upload_version', product_id=product.id) }}" class="btn btn-success btn-sm">
+      <i class="bi bi-cloud-upload me-1"></i>上传新版本
+    </a>
+  </div>
+</div>
+
+{# 版本列表 #}
+<div class="card">
+  <div class="card-header"><i class="bi bi-list-ul me-2 text-success"></i>版本列表</div>
+  <div class="card-body p-0">
+    {% if versions %}
+
+    {# Desktop table #}
+    <div class="table-responsive desktop-table">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>版本名称</th>
+            <th>版本号</th>
+            <th>文件名</th>
+            <th>大小</th>
+            <th>更新说明</th>
+            <th>状态</th>
+            <th>上传时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in versions %}
+          <tr>
+            <td class="fw-600">{{ v.version_name }}</td>
+            <td><span class="badge bg-secondary">{{ v.version_code }}</span></td>
+            <td style="font-size:.8rem;color:#6b7280">{{ v.file_name }}</td>
+            <td style="font-size:.8rem;color:#6b7280">
+              {% if v.file_size %}{{ '%.1f'|format(v.file_size/1024/1024) }} MB{% else %}—{% endif %}
+            </td>
+            <td style="font-size:.82rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              {{ v.description or '—' }}
+            </td>
+            <td>
+              {% if v.is_active %}
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>当前版本</span>
+              {% else %}
+                <span class="badge bg-light text-muted border">未发布</span>
+              {% endif %}
+            </td>
+            <td style="font-size:.8rem;color:#6b7280">{{ v.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>
+              <div class="d-flex gap-1 flex-wrap">
+                <a href="/api/v1/download/{{ v.id }}" class="btn btn-sm btn-outline-primary py-0">
+                  <i class="bi bi-download me-1"></i>下载
+                </a>
+                {% if not v.is_active %}
+                <form method="post" action="{{ url_for('admin.activate_version', product_id=product.id, version_id=v.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-success py-0">
+                    <i class="bi bi-check-circle me-1"></i>发布
+                  </button>
+                </form>
+                <form method="post" action="{{ url_for('admin.delete_version', product_id=product.id, version_id=v.id) }}"
+                      onsubmit="return confirm('确认删除版本 {{ v.version_name }}？')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-danger py-0">
+                    <i class="bi bi-trash me-1"></i>删除
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Mobile cards #}
+    <div class="mobile-list px-3 py-2">
+      {% for v in versions %}
+      <div class="m-card">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="m-card-title">{{ v.version_name }}
+            <span class="badge bg-secondary ms-1" style="font-size:.7rem">{{ v.version_code }}</span>
+          </span>
+          {% if v.is_active %}
+            <span class="badge bg-success">当前版本</span>
+          {% else %}
+            <span class="badge bg-light text-muted border">未发布</span>
+          {% endif %}
+        </div>
+        <div class="m-card-row"><span>文件名</span><span style="font-size:.78rem">{{ v.file_name }}</span></div>
+        <div class="m-card-row"><span>大小</span><span>{% if v.file_size %}{{ '%.1f'|format(v.file_size/1024/1024) }} MB{% else %}—{% endif %}</span></div>
+        {% if v.description %}
+        <div class="m-card-row"><span>更新说明</span><span style="font-size:.78rem">{{ v.description[:30] }}{% if v.description|length > 30 %}…{% endif %}</span></div>
+        {% endif %}
+        <div class="m-card-row"><span>上传时间</span><span>{{ v.created_at.strftime('%m-%d %H:%M') }}</span></div>
+        <div class="m-card-actions">
+          <a href="/api/v1/download/{{ v.id }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-download me-1"></i>下载
+          </a>
+          {% if not v.is_active %}
+          <form method="post" action="{{ url_for('admin.activate_version', product_id=product.id, version_id=v.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-success"><i class="bi bi-check-circle me-1"></i>发布</button>
+          </form>
+          <form method="post" action="{{ url_for('admin.delete_version', product_id=product.id, version_id=v.id) }}"
+                onsubmit="return confirm('确认删除？')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-cloud-arrow-up" style="font-size:2.5rem"></i>
+      <p class="mt-2">暂无版本，<a href="{{ url_for('admin.upload_version', product_id=product.id) }}">立即上传</a></p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

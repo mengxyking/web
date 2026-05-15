@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>登录 - OnlineStats</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #134e4a 0%, #0d9488 100%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem env(safe-area-inset-right, 1rem) 1rem env(safe-area-inset-left, 1rem);
+    }
+    .card { width: 100%; max-width: 400px; border: none; border-radius: 1.25rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,.25); overflow: hidden; }
+    .card-top {
+      background: linear-gradient(135deg, #134e4a 0%, #0f766e 100%);
+      padding: 2rem; text-align: center; color: #fff;
+    }
+    .card-top .icon {
+      width: 64px; height: 64px; margin: 0 auto .75rem;
+      background: rgba(255,255,255,.2); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 1.7rem;
+    }
+    .card-top h5 { font-weight: 700; margin: 0; }
+    .card-top p  { opacity: .8; font-size: .88rem; margin: .3rem 0 0; }
+    .card-body { padding: 2rem; }
+    .form-control { min-height: 46px; border-radius: .625rem; border-color: #d1fae5; }
+    .form-control:focus { border-color: #0f766e; box-shadow: 0 0 0 .2rem rgba(15,118,110,.2); }
+    .input-group-text { background: #f0fdf9; border-color: #d1fae5; border-radius: .625rem 0 0 .625rem; min-width: 44px; justify-content: center; color: #6b7280; }
+    .input-group .form-control { border-radius: 0 .625rem .625rem 0; }
+    .input-group .btn { border-radius: 0 .625rem .625rem 0; min-height: 46px; }
+    .btn-main {
+      width: 100%; min-height: 48px;
+      background: linear-gradient(135deg, #134e4a, #0d9488);
+      border: none; color: #fff; font-weight: 600; border-radius: .75rem;
+      transition: opacity .2s;
+    }
+    .btn-main:hover { opacity: .9; color: #fff; }
+    .security-tip { background: #fef9c3; border: 1px solid #fde047;
+                    border-radius: .5rem; padding: .6rem .8rem;
+                    font-size: .8rem; color: #854d0e; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="card-top">
+    <div class="icon"><i class="bi bi-shield-lock-fill"></i></div>
+    <h5>OnlineStats</h5>
+    <p>在线设备统计平台</p>
+  </div>
+  <div class="card-body">
+    {% if error %}
+      <div class="alert alert-danger d-flex align-items-center py-2 mb-3" style="border-radius:.625rem;font-size:.88rem">
+        <i class="bi bi-exclamation-circle me-2"></i>{{ error }}
+      </div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('admin.login') }}" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-3">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-person"></i></span>
+          <input type="text" name="username" class="form-control" placeholder="用户名" required>
+        </div>
+      </div>
+      <div class="mb-4">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-lock"></i></span>
+          <input type="password" name="password" class="form-control" id="pwd" placeholder="密码" required>
+          <button class="btn btn-outline-secondary" type="button"
+                  onclick="const i=document.getElementById('pwd');i.type=i.type==='password'?'text':'password'">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-main">
+        <i class="bi bi-box-arrow-in-right me-1"></i>登录
+      </button>
+    </form>
+    <div class="security-tip">
+      <i class="bi bi-shield-check me-1"></i>连续 5 次错误将锁定 5 分钟
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

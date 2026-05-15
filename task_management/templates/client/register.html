@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#764ba2">
+  <title>注册 - 任务平台</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --safe-top:    env(safe-area-inset-top,    0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { -webkit-tap-highlight-color: transparent; }
+    html, body {
+      min-height: 100vh; min-height: 100dvh;
+      background: linear-gradient(160deg, #667eea 0%, #764ba2 100%);
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: calc(1rem + var(--safe-top)) 1rem calc(1.5rem + var(--safe-bottom));
+      overflow-y: auto;
+    }
+    .register-wrap { width: 100%; max-width: 420px; }
+    .card {
+      border: none; border-radius: 1.25rem;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2); overflow: hidden;
+    }
+    .card-top {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 1.25rem 1.5rem; color: #fff;
+      display: flex; align-items: center; gap: .75rem;
+    }
+    .card-top .back-btn {
+      color: rgba(255,255,255,.85); text-decoration: none;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(255,255,255,.15);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0; transition: background .2s;
+    }
+    .card-top .back-btn:hover { background: rgba(255,255,255,.25); }
+    .card-top h5 { font-weight: 700; margin: 0; font-size: 1.05rem; }
+    .card-top p  { margin: .1rem 0 0; opacity: .8; font-size: .82rem; }
+    .card-body { padding: 1.5rem; }
+
+    .form-label { font-weight: 500; color: #374151; font-size: .88rem; margin-bottom: .3rem; }
+    .form-control {
+      min-height: 48px; border-radius: .75rem;
+      font-size: .95rem; border-color: #e2e8f0;
+    }
+    .form-control:focus { border-color: #764ba2; box-shadow: 0 0 0 .2rem rgba(118,75,162,.2); }
+    .input-group .form-control { border-radius: 0 .75rem .75rem 0; }
+    .input-group-text {
+      background: #f8fafc; border-color: #e2e8f0;
+      border-radius: .75rem 0 0 .75rem; color: #94a3b8;
+      min-width: 44px; justify-content: center;
+    }
+
+    .strength-wrap { margin-top: .35rem; }
+    .strength-track {
+      height: 4px; border-radius: 2px; background: #e5e7eb;
+      overflow: hidden;
+    }
+    .strength-fill {
+      height: 100%; border-radius: 2px; width: 0;
+      transition: width .3s, background .3s;
+    }
+    .strength-fill.s1 { width: 33%; background: #ef4444; }
+    .strength-fill.s2 { width: 66%; background: #f59e0b; }
+    .strength-fill.s3 { width: 100%; background: #22c55e; }
+    .strength-text { font-size: .75rem; color: #94a3b8; margin-top: .2rem; }
+
+    .btn-main {
+      width: 100%; min-height: 50px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none; color: #fff; font-weight: 600; font-size: .98rem;
+      border-radius: .875rem; transition: opacity .2s, transform .1s;
+    }
+    .btn-main:hover  { opacity: .9; color: #fff; }
+    .btn-main:active { transform: scale(.98); color: #fff; }
+    .login-link { text-align: center; font-size: .88rem; color: #6b7280; margin-top: 1rem; margin-bottom: 0; }
+    .login-link a { color: #764ba2; font-weight: 500; }
+  </style>
+</head>
+<body>
+
+<div class="register-wrap">
+  <div class="card">
+    <div class="card-top">
+      <a href="{{ url_for('client.login') }}" class="back-btn">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <div>
+        <h5>创建账号</h5>
+        <p>填写以下信息完成注册</p>
+      </div>
+    </div>
+    <div class="card-body">
+      {% if error %}
+        <div class="alert alert-danger d-flex align-items-center py-2 mb-3" style="border-radius:.75rem;font-size:.88rem">
+          <i class="bi bi-exclamation-circle me-2 flex-shrink-0"></i>{{ error }}
+        </div>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('client.register') }}" id="regForm">
+        <div class="mb-3">
+          <label class="form-label">用户名</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-person"></i></span>
+            <input type="text" name="username" class="form-control"
+                   placeholder="3-20 个字符" minlength="3" maxlength="20"
+                   autocomplete="username" required>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">密码</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+            <input type="password" name="password" class="form-control" id="pwd"
+                   placeholder="至少 6 位" autocomplete="new-password"
+                   required oninput="checkStrength(this.value)">
+          </div>
+          <div class="strength-wrap">
+            <div class="strength-track"><div class="strength-fill" id="strengthBar"></div></div>
+            <div class="strength-text" id="strengthText"></div>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="form-label">确认密码</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+            <input type="password" name="confirm_password" class="form-control" id="confirm"
+                   placeholder="再次输入密码" autocomplete="new-password"
+                   required oninput="checkMatch()">
+          </div>
+          <div class="text-danger mt-1" id="matchTip" style="font-size:.78rem"></div>
+        </div>
+        <button type="submit" class="btn btn-main">
+          <i class="bi bi-person-check me-1"></i>注册
+        </button>
+      </form>
+
+      <p class="login-link">已有账号？<a href="{{ url_for('client.login') }}">去登录</a></p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  function checkStrength(val) {
+    const bar = document.getElementById('strengthBar');
+    const tip = document.getElementById('strengthText');
+    bar.className = 'strength-fill';
+    if (!val) { tip.textContent = ''; return; }
+    const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(val);
+    const medium = /^(?=.*[a-zA-Z])(?=.*\d).{6,}$/.test(val);
+    if (strong)       { bar.classList.add('s3'); tip.textContent = '强'; }
+    else if (medium)  { bar.classList.add('s2'); tip.textContent = '中'; }
+    else              { bar.classList.add('s1'); tip.textContent = '弱'; }
+  }
+  function checkMatch() {
+    const pwd     = document.getElementById('pwd').value;
+    const confirm = document.getElementById('confirm').value;
+    document.getElementById('matchTip').textContent =
+      confirm && pwd !== confirm ? '两次密码不一致' : '';
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,610 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} 明细{% endblock %}
+{% block page_title %}<i class="bi bi-bar-chart-line me-2"></i>{{ product.name }}{% endblock %}
+
+{% block content %}
+
+{# ── 面包屑 ── #}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0" style="font-size:.85rem">
+      <li class="breadcrumb-item"><a href="{{ url_for('admin.products') }}" class="text-success">产品管理</a></li>
+      <li class="breadcrumb-item active">{{ product.name }}</li>
+    </ol>
+  </nav>
+  {% if current_user.is_super %}
+  <a href="{{ url_for('admin.versions', product_id=product.id) }}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-cloud-arrow-up me-1"></i>版本管理
+  </a>
+  {% endif %}
+</div>
+
+{# ── 产品信息 ── #}
+<div class="card mb-4 p-3">
+  <div class="d-flex align-items-center gap-3 flex-wrap">
+    <div style="width:48px;height:48px;flex-shrink:0;background:linear-gradient(135deg,#134e4a,#0d9488);
+                border-radius:.75rem;display:flex;align-items:center;justify-content:center">
+      <i class="bi bi-box-seam text-white fs-5"></i>
+    </div>
+    <div class="flex-grow-1 min-w-0">
+      <div class="fw-700">{{ product.name }}</div>
+      <div style="font-size:.78rem;color:#6b7280;word-break:break-all">
+        Key: <code>{{ product.product_key }}</code>
+        &nbsp;·&nbsp;
+        {% if product.is_active %}<span class="badge bg-success">启用</span>
+        {% else %}<span class="badge bg-secondary">禁用</span>{% endif %}
+        {% if product.remark %}&nbsp;·&nbsp; {{ product.remark }}{% endif %}
+      </div>
+    </div>
+    <div class="text-muted" style="font-size:.8rem;flex-shrink:0">
+      统计日期：{{ today.strftime('%Y-%m-%d') }}
+    </div>
+  </div>
+</div>
+
+{# ── 近 30 天趋势折线图 ── #}
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="bi bi-graph-up me-2 text-success"></i>近 30 天在线趋势
+  </div>
+  <div class="card-body" style="padding:1rem 1.25rem">
+    <canvas id="trendChart" height="90"></canvas>
+  </div>
+</div>
+
+{# ── 今日汇总 ── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card bg-blue">
+      <i class="bi bi-pc-display icon"></i>
+      <div class="label">今日在线电脑</div>
+      <div class="value">{{ comp_online }}</div>
+      <div class="sub">台</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card bg-purple">
+      <i class="bi bi-phone icon"></i>
+      <div class="label">今日在线手机</div>
+      <div class="value">{{ phone_online }}</div>
+      <div class="sub">台</div>
+    </div>
+  </div>
+</div>
+
+{# ── 电脑设备明细（近7天 Tab） ── #}
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-pc-display me-2 text-primary"></i>在线电脑设备
+  </div>
+  <div class="card-body p-0">
+    <ul class="nav nav-tabs px-3 pt-2" role="tablist">
+      {% for d in days %}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if loop.last %}active{% endif %}"
+                data-bs-toggle="tab"
+                data-bs-target="#comp-pane-{{ d.strftime('%Y%m%d') }}"
+                type="button" style="font-size:.85rem;padding:.45rem .8rem">
+          {% if loop.last %}今天{% else %}{{ d.strftime('%m-%d') }}{% endif %}
+          {% if daily_comp_rows[d]|length > 0 %}
+          <span class="badge bg-primary ms-1" style="font-size:.68rem">{{ daily_comp_rows[d]|length }}</span>
+          {% endif %}
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="tab-content">
+      {% for d in days %}
+      {% set comp_rows = daily_comp_rows[d] %}
+      <div class="tab-pane fade {% if loop.last %}show active{% endif %}"
+           id="comp-pane-{{ d.strftime('%Y%m%d') }}">
+        {% if comp_rows %}
+
+        {# Desktop table #}
+        <div class="table-responsive desktop-table">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>电脑设备码</th>
+                <th class="text-center">当日在线手机数</th>
+                <th>首次上线</th>
+                <th>最近上线</th>
+                <th>备注</th>
+                <th>有效期</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for comp, phone_count in comp_rows %}
+              <tr {% if not comp.is_active %}class="table-secondary"{% endif %}>
+                <td class="text-muted" style="font-size:.78rem">#{{ comp.id }}</td>
+                <td>
+                  <code style="font-size:.82rem">{{ comp.device_code }}</code>
+                  {% if not comp.is_active %}<span class="badge bg-danger ms-1" style="font-size:.68rem">已禁用</span>{% endif %}
+                </td>
+                <td class="text-center">
+                  <span class="badge" style="background:#7c3aed;font-size:.85rem;padding:.35em .7em">{{ phone_count }}</span>
+                </td>
+                <td class="text-muted" style="font-size:.8rem">{{ comp.first_seen.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="text-muted" style="font-size:.8rem">{{ comp.last_seen.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td style="max-width:160px">
+                  <span class="text-muted remark-text" style="font-size:.8rem">{{ comp.remark or '—' }}</span>
+                </td>
+                <td style="white-space:nowrap;font-size:.8rem">
+                  {% set exp = comp.effective_expire_at %}
+                  {% if comp.expire_at and comp.expire_at.year >= 2099 %}
+                    <span class="text-success"><i class="bi bi-infinity me-1"></i>永久</span>
+                  {% elif comp.is_expired %}
+                    <span class="text-danger"><i class="bi bi-x-circle me-1"></i>{{ exp.strftime('%Y-%m-%d') }}</span>
+                  {% elif (exp - today).days <= 2 %}
+                    <span class="text-warning"><i class="bi bi-exclamation-circle me-1"></i>{{ exp.strftime('%Y-%m-%d') }}</span>
+                  {% else %}
+                    <span class="text-success">{{ exp.strftime('%Y-%m-%d') }}</span>
+                  {% endif %}
+                  {% if not comp.expire_at %}<small class="text-muted">(试用)</small>{% endif %}
+                </td>
+                <td>
+                  <div class="d-flex gap-1 flex-wrap">
+                    <a href="{{ url_for('admin.computer_detail', product_id=product.id, comp_id=comp.id) }}"
+                       class="btn btn-sm btn-outline-primary py-0">
+                      <i class="bi bi-phone me-1"></i>查看手机
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0"
+                            data-url="{{ url_for('admin.update_computer_remark', product_id=product.id, comp_id=comp.id) }}"
+                            data-remark="{{ comp.remark or '' }}"
+                            onclick="openRemarkModal(this, this.dataset.url, this.dataset.remark || null)">
+                      <i class="bi bi-pencil me-1"></i>备注
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info py-0"
+                            data-expire-url="{{ url_for('admin.set_computer_expire', product_id=product.id, comp_id=comp.id) }}"
+                            data-expire-at="{{ comp.expire_at.strftime('%Y-%m-%d') if comp.expire_at else '' }}"
+                            onclick="openExpireModal(this, this.dataset.expireUrl, this.dataset.expireAt)">
+                      <i class="bi bi-calendar me-1"></i>有效期
+                    </button>
+                    <button type="button" class="btn btn-sm py-0 {% if comp.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+                            data-toggle-url="{{ url_for('admin.toggle_computer', product_id=product.id, comp_id=comp.id) }}"
+                            data-device-code="{{ comp.device_code }}"
+                            data-is-active="{{ '1' if comp.is_active else '0' }}"
+                            onclick="openConfirmModal(this, this.dataset.toggleUrl, this.dataset.deviceCode, this.dataset.isActive==='1')">
+                      {% if comp.is_active %}<i class="bi bi-slash-circle me-1"></i>禁用{% else %}<i class="bi bi-check-circle me-1"></i>启用{% endif %}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {# Mobile cards #}
+        <div class="mobile-list px-3 py-2">
+          {% for comp, phone_count in comp_rows %}
+          <div class="m-card {% if not comp.is_active %}opacity-75{% endif %}">
+            <div class="m-card-title" style="font-family:monospace;font-size:.85rem">
+              {{ comp.device_code }}
+              {% if not comp.is_active %}<span class="badge bg-danger ms-1" style="font-size:.65rem">已禁用</span>{% endif %}
+            </div>
+            <div class="m-card-row"><span>当日在线手机</span><span style="color:#7c3aed" class="fw-700">{{ phone_count }} 台</span></div>
+            <div class="m-card-row"><span>首次上线</span><span>{{ comp.first_seen.strftime('%Y-%m-%d') }}</span></div>
+            <div class="m-card-row"><span>最近上线</span><span>{{ comp.last_seen.strftime('%m-%d %H:%M') }}</span></div>
+            <div class="m-card-row remark-row"{% if not comp.remark %} style="display:none"{% endif %}>
+              <span>备注</span><span class="text-muted remark-text">{{ comp.remark or '' }}</span>
+            </div>
+            <div class="m-card-row">
+              <span>有效期</span>
+              <span class="expire-display" style="font-size:.8rem">
+                {% set exp = comp.effective_expire_at %}
+                {% if comp.expire_at and comp.expire_at.year >= 2099 %}<span class="text-success"><i class="bi bi-infinity me-1"></i>永久</span>
+                {% elif comp.is_expired %}<span class="text-danger">{{ exp.strftime('%Y-%m-%d') }} 已过期</span>
+                {% elif (exp - today).days <= 2 %}<span class="text-warning">{{ exp.strftime('%Y-%m-%d') }} 即将到期</span>
+                {% else %}<span class="text-success">{{ exp.strftime('%Y-%m-%d') }}</span>{% endif %}
+                {% if not comp.expire_at %}<small class="text-muted">(试用)</small>{% endif %}
+              </span>
+            </div>
+            <div class="m-card-actions">
+              <a href="{{ url_for('admin.computer_detail', product_id=product.id, comp_id=comp.id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-phone me-1"></i>查看手机
+              </a>
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      data-url="{{ url_for('admin.update_computer_remark', product_id=product.id, comp_id=comp.id) }}"
+                      data-remark="{{ comp.remark or '' }}"
+                      onclick="openRemarkModal(this, this.dataset.url, this.dataset.remark || null)">
+                <i class="bi bi-pencil me-1"></i>备注
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-info"
+                      data-expire-url="{{ url_for('admin.set_computer_expire', product_id=product.id, comp_id=comp.id) }}"
+                      data-expire-at="{{ comp.expire_at.strftime('%Y-%m-%d') if comp.expire_at else '' }}"
+                      onclick="openExpireModal(this, this.dataset.expireUrl, this.dataset.expireAt)">
+                <i class="bi bi-calendar me-1"></i>有效期
+              </button>
+              <button type="button" class="btn btn-sm {% if comp.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+                      data-toggle-url="{{ url_for('admin.toggle_computer', product_id=product.id, comp_id=comp.id) }}"
+                      data-device-code="{{ comp.device_code }}"
+                      data-is-active="{{ '1' if comp.is_active else '0' }}"
+                      onclick="openConfirmModal(this, this.dataset.toggleUrl, this.dataset.deviceCode, this.dataset.isActive==='1')">
+                {% if comp.is_active %}<i class="bi bi-slash-circle me-1"></i>禁用{% else %}<i class="bi bi-check-circle me-1"></i>启用{% endif %}
+              </button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        {% else %}
+        <div class="text-center py-4 text-muted">
+          <i class="bi bi-pc-display" style="font-size:2rem"></i>
+          <p class="mt-2 mb-0" style="font-size:.88rem">{{ d.strftime('%m-%d') }} 暂无电脑设备上线</p>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ── 禁用/启用确认弹窗 ── #}
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="confirmTitle"></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="font-size:.88rem">
+        <p id="confirmMessage" class="mb-2"></p>
+        <code id="confirmDevice" style="font-size:.78rem;word-break:break-all"></code>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-sm" id="confirmBtn"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── 备注编辑弹窗 ── #}
+<div class="modal fade" id="remarkModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-pencil me-2"></i>编辑备注</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="remarkForm" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <textarea id="remarkInput" name="remark" class="form-control" rows="3"
+                    placeholder="请输入备注内容（留空则清除备注）" maxlength="255"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check me-1"></i>保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="saveToast" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:none;pointer-events:none">
+  <div class="alert alert-success py-2 px-3 mb-0 shadow-sm">
+    <i class="bi bi-check-circle me-1"></i><span id="toastText">备注已保存</span>
+  </div>
+</div>
+
+{# ── 有效期设置弹窗 ── #}
+<div class="modal fade" id="expireModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-calendar me-2"></i>设置有效期</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 mb-3">
+          <div class="col-3">
+            <div class="expire-preset text-center p-2 rounded border" style="cursor:pointer" data-type="月卡" data-days="30">
+              <i class="bi bi-calendar-month fs-5 text-primary"></i>
+              <div class="fw-600 mt-1" style="font-size:.85rem">月卡</div>
+              <div class="text-muted" style="font-size:.72rem">30 天</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="expire-preset text-center p-2 rounded border" style="cursor:pointer" data-type="季卡" data-days="90">
+              <i class="bi bi-calendar3 fs-5 text-info"></i>
+              <div class="fw-600 mt-1" style="font-size:.85rem">季卡</div>
+              <div class="text-muted" style="font-size:.72rem">90 天</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="expire-preset text-center p-2 rounded border" style="cursor:pointer" data-type="年卡" data-days="365">
+              <i class="bi bi-calendar-check fs-5 text-success"></i>
+              <div class="fw-600 mt-1" style="font-size:.85rem">年卡</div>
+              <div class="text-muted" style="font-size:.72rem">365 天</div>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="expire-preset text-center p-2 rounded border" style="cursor:pointer" data-type="永久">
+              <i class="bi bi-infinity fs-5 text-warning"></i>
+              <div class="fw-600 mt-1" style="font-size:.85rem">永久</div>
+              <div class="text-muted" style="font-size:.72rem">不限期</div>
+            </div>
+          </div>
+        </div>
+        <hr class="my-2">
+        <div class="mb-2" style="font-size:.82rem;color:#6b7280">或手动选择日期（留空则恢复默认试用期）</div>
+        <input type="date" id="expireInput" class="form-control form-control-sm">
+        <input type="hidden" id="cardTypeInput" value="">
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary btn-sm" id="expireBtn"><i class="bi bi-check me-1"></i>保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const CSRF_TOKEN = '{{ csrf_token() }}';
+let _toggleUrl      = null;
+let _toggleBtn      = null;
+let _remarkBtn      = null;
+let _expireUrl      = null;
+let _expireBaseDate = null;
+let _expireBtn      = null;
+
+function buildExpireHtml(expireAt) {
+  if (!expireAt) return '<small class="text-muted">(试用)</small>';
+  if (expireAt >= '2099-01-01') return '<span class="text-success"><i class="bi bi-infinity me-1"></i>永久</span>';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp   = new Date(expireAt + 'T00:00:00');
+  const diff  = Math.floor((exp - today) / 86400000);
+  if (diff < 0)  return `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${expireAt}</span>`;
+  if (diff <= 2) return `<span class="text-warning"><i class="bi bi-exclamation-circle me-1"></i>${expireAt}</span>`;
+  return `<span class="text-success">${expireAt}</span>`;
+}
+
+function showToast(msg) {
+  document.getElementById('toastText').textContent = msg;
+  const t = document.getElementById('saveToast');
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 2000);
+}
+
+function _applyToggle(btn, isActive) {
+  const url = btn.dataset.toggleUrl;
+  document.querySelectorAll('[data-toggle-url="' + url + '"]').forEach(b => {
+    b.dataset.isActive = isActive ? '1' : '0';
+    b.className = b.className.replace(/btn-outline-(danger|success)/, isActive ? 'btn-outline-danger' : 'btn-outline-success');
+    b.innerHTML = isActive ? '<i class="bi bi-slash-circle me-1"></i>禁用' : '<i class="bi bi-check-circle me-1"></i>启用';
+    const row = b.closest('tr');
+    if (row) {
+      isActive ? row.classList.remove('table-secondary') : row.classList.add('table-secondary');
+      const codeTd = row.cells[1];
+      if (codeTd) {
+        const badge = codeTd.querySelector('.badge.bg-danger');
+        if (!isActive && !badge) codeTd.insertAdjacentHTML('beforeend', '<span class="badge bg-danger ms-1" style="font-size:.68rem">已禁用</span>');
+        else if (isActive && badge) badge.remove();
+      }
+    }
+    const card = b.closest('.m-card');
+    if (card) {
+      isActive ? card.classList.remove('opacity-75') : card.classList.add('opacity-75');
+      const title = card.querySelector('.m-card-title');
+      if (title) {
+        const badge = title.querySelector('.badge.bg-danger');
+        if (!isActive && !badge) title.insertAdjacentHTML('beforeend', '<span class="badge bg-danger ms-1" style="font-size:.65rem">已禁用</span>');
+        else if (isActive && badge) badge.remove();
+      }
+    }
+  });
+}
+
+function _applyRemark(btn, newRemark) {
+  const url = btn.dataset.url;
+  document.querySelectorAll('[data-url="' + url + '"]').forEach(b => {
+    const row = b.closest('tr');
+    if (row) { const s = row.querySelector('.remark-text'); if (s) s.textContent = newRemark || '—'; }
+    const card = b.closest('.m-card');
+    if (card) {
+      const t = card.querySelector('.remark-text'); if (t) t.textContent = newRemark || '';
+      const r = card.querySelector('.remark-row'); if (r) r.style.display = newRemark ? '' : 'none';
+    }
+  });
+}
+
+function _resetPresets() {
+  document.querySelectorAll('#expireModal .expire-preset').forEach(c => {
+    c.style.background = '';
+    c.style.borderColor = '';
+    c.style.color = '';
+  });
+  document.getElementById('cardTypeInput').value = '';
+}
+
+document.querySelectorAll('#expireModal .expire-preset').forEach(card => {
+  card.addEventListener('click', function() {
+    _resetPresets();
+    this.style.background = '#f0fdf9';
+    this.style.borderColor = '#0f766e';
+    document.getElementById('cardTypeInput').value = this.dataset.type;
+    if (this.dataset.type === '永久') {
+      document.getElementById('expireInput').value = '2099-12-31';
+    } else {
+      // Base = current expire date (if in the future), otherwise today
+      const today = new Date(); today.setHours(0,0,0,0);
+      let base = today;
+      if (_expireBaseDate && _expireBaseDate < '2099') {
+        const bd = new Date(_expireBaseDate + 'T00:00:00');
+        if (bd > today) base = bd;
+      }
+      base.setDate(base.getDate() + parseInt(this.dataset.days));
+      const y = base.getFullYear();
+      const m = String(base.getMonth() + 1).padStart(2, '0');
+      const day = String(base.getDate()).padStart(2, '0');
+      document.getElementById('expireInput').value = `${y}-${m}-${day}`;
+    }
+  });
+});
+
+document.getElementById('expireInput').addEventListener('change', _resetPresets);
+
+function openExpireModal(btn, url, currentExpire) {
+  _expireBtn      = btn;
+  _expireUrl      = url;
+  _expireBaseDate = currentExpire || null;
+  _resetPresets();
+  document.getElementById('expireInput').value = currentExpire || '';
+  if (currentExpire && currentExpire >= '2099') {
+    const perm = document.querySelector('#expireModal .expire-preset[data-type="永久"]');
+    if (perm) { perm.style.background = '#f0fdf9'; perm.style.borderColor = '#0f766e'; }
+    document.getElementById('cardTypeInput').value = '永久';
+  }
+  new bootstrap.Modal(document.getElementById('expireModal')).show();
+}
+
+document.getElementById('expireBtn').addEventListener('click', function() {
+  const newExpireAt = document.getElementById('expireInput').value;
+  const fd = new FormData();
+  fd.append('csrf_token', CSRF_TOKEN);
+  fd.append('expire_at', newExpireAt);
+  fd.append('card_type', document.getElementById('cardTypeInput').value);
+  fetch(_expireUrl, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) throw new Error();
+      if (newExpireAt && _expireBtn) {
+        // Direct DOM patch — no second round-trip
+        _expireBtn.dataset.expireAt = newExpireAt;
+        const row  = _expireBtn.closest('tr');
+        const card = _expireBtn.closest('.m-card');
+        if (row)  { const cells = row.querySelectorAll('td'); cells[cells.length - 2].innerHTML = buildExpireHtml(newExpireAt); }
+        if (card) { const d = card.querySelector('.expire-display'); if (d) d.innerHTML = buildExpireHtml(newExpireAt); }
+        bootstrap.Modal.getInstance(document.getElementById('expireModal')).hide();
+        showToast('有效期已设置');
+      } else {
+        // Cleared — trial end date needs server, fall back to single pane refresh
+        return fetch(window.location.href, { cache: 'no-store' })
+          .then(r => r.text())
+          .then(html => {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            document.querySelectorAll('[id^="comp-pane-"]').forEach(pane => {
+              const fresh = doc.getElementById(pane.id);
+              if (fresh) pane.innerHTML = fresh.innerHTML;
+            });
+            bootstrap.Modal.getInstance(document.getElementById('expireModal')).hide();
+            showToast('有效期已清除');
+          });
+      }
+    })
+    .catch(() => alert('设置失败，请重试'));
+});
+
+function openConfirmModal(btn, url, deviceCode, isActive) {
+  _toggleBtn = btn;
+  _toggleUrl = url;
+  document.getElementById('confirmTitle').textContent   = isActive ? '确认禁用设备' : '确认启用设备';
+  document.getElementById('confirmMessage').textContent = isActive ? '禁用后该设备心跳请求将被拒绝，是否继续？' : '启用后该设备恢复正常，是否继续？';
+  document.getElementById('confirmDevice').textContent  = deviceCode;
+  const confirmBtnEl = document.getElementById('confirmBtn');
+  confirmBtnEl.textContent  = isActive ? '确认禁用' : '确认启用';
+  confirmBtnEl.className    = 'btn btn-sm ' + (isActive ? 'btn-danger' : 'btn-success');
+  new bootstrap.Modal(document.getElementById('confirmModal')).show();
+}
+
+document.getElementById('confirmBtn').addEventListener('click', function() {
+  const fd = new FormData();
+  fd.append('csrf_token', CSRF_TOKEN);
+  fetch(_toggleUrl, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) throw new Error();
+      _applyToggle(_toggleBtn, data.is_active);
+      bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+    })
+    .catch(() => alert('操作失败，请重试'));
+});
+
+function openRemarkModal(btn, action, current) {
+  _remarkBtn = btn;
+  document.getElementById('remarkForm').action = action;
+  document.getElementById('remarkInput').value = current || '';
+  new bootstrap.Modal(document.getElementById('remarkModal')).show();
+}
+
+document.getElementById('remarkForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const form = this;
+  const newRemark = document.getElementById('remarkInput').value.trim();
+  fetch(form.action, { method: 'POST', body: new FormData(form) })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) throw new Error();
+      _applyRemark(_remarkBtn, newRemark);
+      bootstrap.Modal.getInstance(document.getElementById('remarkModal')).hide();
+      showToast('备注已保存');
+    })
+    .catch(() => alert('保存失败，请重试'));
+});
+</script>
+<script>
+(function () {
+  const labels = {{ chart_labels | tojson }};
+  const comps  = {{ chart_comps  | tojson }};
+  const phones = {{ chart_phones | tojson }};
+
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '电脑在线',
+          data: comps,
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: true,
+          tension: .35,
+        },
+        {
+          label: '手机在线',
+          data: phones,
+          borderColor: '#7c3aed',
+          backgroundColor: 'rgba(124,58,237,.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: true,
+          tension: .35,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 12 }, boxWidth: 14 } },
+        tooltip: { bodyFont: { size: 12 } },
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(0,0,0,.04)' },
+          ticks: { font: { size: 11 }, maxRotation: 45 },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,.04)' },
+          ticks: { font: { size: 11 }, precision: 0 },
+        },
+      },
+    },
+  });
+})();
+</script>
+{% endblock %}

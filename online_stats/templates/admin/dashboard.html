@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}今日概览{% endblock %}
+{% block page_title %}<i class="bi bi-speedometer2 me-2"></i>今日概览{% endblock %}
+
+{% block content %}
+
+<p class="text-muted mb-3" style="font-size:.85rem">
+  <i class="bi bi-calendar3 me-1"></i>统计日期：<strong>{{ today.strftime('%Y年%m月%d日') }}</strong>
+</p>
+
+{# ── 汇总卡片 ── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card bg-teal">
+      <i class="bi bi-box-seam icon"></i>
+      <div class="label">产品总数</div>
+      <div class="value">{{ total_products }}</div>
+      <div class="sub">已启用产品</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card bg-orange">
+      <i class="bi bi-activity icon"></i>
+      <div class="label">今日活跃产品</div>
+      <div class="value">{{ active_products }}</div>
+      <div class="sub">有设备上线</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card bg-blue">
+      <i class="bi bi-pc-display icon"></i>
+      <div class="label">今日在线电脑</div>
+      <div class="value">{{ comp_online }}</div>
+      <div class="sub">台设备上过线</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card bg-purple">
+      <i class="bi bi-phone icon"></i>
+      <div class="label">今日在线手机</div>
+      <div class="value">{{ phone_online }}</div>
+      <div class="sub">台设备上过线</div>
+    </div>
+  </div>
+</div>
+
+{# ── 产品明细表 ── #}
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-table me-2 text-success"></i>各产品今日在线统计</span>
+    {% if current_user.is_super %}
+    <a href="{{ url_for('admin.add_product') }}" class="btn btn-sm btn-success">
+      <i class="bi bi-plus-lg me-1"></i>添加产品
+    </a>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if product_stats %}
+
+    {# Desktop table #}
+    <div class="table-responsive desktop-table">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>产品名称</th>
+            <th>Product Key</th>
+            <th>状态</th>
+            <th class="text-center">今日在线电脑</th>
+            <th class="text-center">今日在线手机</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in product_stats %}
+          <tr>
+            <td class="fw-500">{{ row.product.name }}</td>
+            <td><code style="font-size:.78rem;color:#6b7280">{{ row.product.product_key }}</code></td>
+            <td>
+              {% if row.product.is_active %}<span class="badge bg-success">启用</span>
+              {% else %}<span class="badge bg-secondary">禁用</span>{% endif %}
+            </td>
+            <td class="text-center">
+              <span class="fw-700 text-primary fs-5">{{ row.comp_online }}</span>
+              <span class="text-muted" style="font-size:.75rem"> 台</span>
+            </td>
+            <td class="text-center">
+              <span class="fw-700 fs-5" style="color:#7c3aed">{{ row.phone_online }}</span>
+              <span class="text-muted" style="font-size:.75rem"> 台</span>
+            </td>
+            <td>
+              <a href="{{ url_for('admin.product_detail', product_id=row.product.id) }}"
+                 class="btn btn-sm btn-outline-success">
+                <i class="bi bi-bar-chart-line me-1"></i>明细
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Mobile cards #}
+    <div class="mobile-list px-3 py-2">
+      {% for row in product_stats %}
+      <div class="m-card">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="m-card-title">{{ row.product.name }}</span>
+          {% if row.product.is_active %}<span class="badge bg-success">启用</span>
+          {% else %}<span class="badge bg-secondary">禁用</span>{% endif %}
+        </div>
+        <div class="m-card-row"><span>今日在线电脑</span><span class="text-primary fw-700">{{ row.comp_online }} 台</span></div>
+        <div class="m-card-row"><span>今日在线手机</span><span style="color:#7c3aed" class="fw-700">{{ row.phone_online }} 台</span></div>
+        <div class="m-card-actions">
+          <a href="{{ url_for('admin.product_detail', product_id=row.product.id) }}"
+             class="btn btn-sm btn-outline-success">
+            <i class="bi bi-bar-chart-line me-1"></i>明细
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-inbox" style="font-size:2.5rem"></i>
+      <p class="mt-2">暂无产品{% if current_user.is_super %}，<a href="{{ url_for('admin.add_product') }}">立即添加</a>{% endif %}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

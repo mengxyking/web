@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}添加产品{% endblock %}
+{% block page_title %}<i class="bi bi-plus-square me-2"></i>添加产品{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;width:100%">
+  <div class="card">
+    <div class="card-header">
+      <i class="bi bi-box-seam me-2 text-success"></i>新建产品
+    </div>
+    <div class="card-body p-4">
+      {% if error %}
+        <div class="alert alert-danger py-2 mb-3" style="font-size:.88rem;border-radius:.625rem">
+          <i class="bi bi-exclamation-circle me-2"></i>{{ error }}
+        </div>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('admin.add_product') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-3">
+          <label class="form-label fw-500">产品名称 <span class="text-danger">*</span></label>
+          <input type="text" name="name" class="form-control"
+                 placeholder="例：企业版客户端" maxlength="100" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-500">Product Key</label>
+          <input type="text" name="product_key" class="form-control"
+                 placeholder="留空则自动生成（推荐）" maxlength="64">
+          <div class="form-text">自动生成格式：<code>pk_xxxx...</code>，也可以自定义任意字符串</div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-500">备注</label>
+          <textarea name="remark" class="form-control" rows="2"
+                    placeholder="产品描述或备注（可选）" maxlength="255"></textarea>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-success flex-fill" style="min-height:44px">
+            <i class="bi bi-check-lg me-1"></i>确认添加
+          </button>
+          <a href="{{ url_for('admin.products') }}" class="btn btn-outline-secondary" style="min-height:44px">
+            取消
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card mt-3 p-3" style="background:#f0fdf9;border:1px dashed #6ee7b7">
+    <div style="font-size:.82rem;color:#065f46">
+      <i class="bi bi-lightbulb me-1"></i>
+      <strong>提示：</strong>Product Key 是接口调用的唯一凭证，添加后在产品列表中复制使用。
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}分配产品 - {{ account.username }}{% endblock %}
+{% block page_title %}<i class="bi bi-box-seam me-2"></i>分配产品权限{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem">
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.accounts') }}" class="text-success">账号管理</a></li>
+    <li class="breadcrumb-item active">{{ account.username }}</li>
+  </ol>
+</nav>
+
+<div class="card mb-3 p-3" style="max-width:580px;width:100%">
+  <div class="d-flex align-items-center gap-3">
+    <div style="width:44px;height:44px;background:linear-gradient(135deg,#7c3aed,#a78bfa);
+                border-radius:.75rem;display:flex;align-items:center;justify-content:center">
+      <i class="bi bi-person text-white fs-5"></i>
+    </div>
+    <div>
+      <div class="fw-700">{{ account.username }}</div>
+      <div style="font-size:.78rem;color:#6b7280">
+        普通管理员 &nbsp;·&nbsp; 为该账号勾选可访问的产品
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="max-width:580px;width:100%">
+  <div class="card-header">
+    <i class="bi bi-box-seam me-2 text-success"></i>选择可访问的产品
+    <span class="text-muted ms-2" style="font-size:.8rem">共 {{ all_products|length }} 个产品</span>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if all_products %}
+      <div class="mb-3">
+        <div class="d-flex gap-2 mb-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary"
+                  onclick="document.querySelectorAll('.prod-cb').forEach(cb=>cb.checked=true)">
+            全选
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-secondary"
+                  onclick="document.querySelectorAll('.prod-cb').forEach(cb=>cb.checked=false)">
+            清空
+          </button>
+        </div>
+        <div style="max-height:360px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:.5rem">
+          {% for p in all_products %}
+          <label class="d-flex align-items-center gap-2 px-3 py-2
+                        {% if not loop.last %}border-bottom{% endif %}
+                        {% if p.id in assigned_ids %}bg-light{% endif %}"
+                 style="cursor:pointer;transition:background .1s"
+                 onmouseover="this.style.background='#f0fdf9'"
+                 onmouseout="this.style.background='{{ '#f9fafb' if p.id in assigned_ids else '' }}'">
+            <input type="checkbox" name="product_ids" value="{{ p.id }}"
+                   class="form-check-input prod-cb m-0"
+                   {% if p.id in assigned_ids %}checked{% endif %}>
+            <span class="flex-grow-1">
+              <span class="fw-600" style="font-size:.88rem">{{ p.name }}</span>
+              <code class="ms-2 text-muted" style="font-size:.75rem">{{ p.product_key }}</code>
+            </span>
+            {% if not p.is_active %}
+              <span class="badge bg-secondary" style="font-size:.7rem">禁用</span>
+            {% endif %}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <p class="text-muted">暂无产品，请先添加产品。</p>
+      {% endif %}
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-check-lg me-1"></i>保存
+        </button>
+        <a href="{{ url_for('admin.accounts') }}" class="btn btn-outline-secondary">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{
+  "socks5": {
+    "proxy": "",
+    "user": "",
+    "passwd": "",
+    "domain_filter": [],
+    "local_ip": "",
+    "proxy_country_code": "",
+    "proxy_type": "socks5",
+    "vpc_node": ""
+  },
+  "devices": [
+    {
+      "container_name": "ALTMVB3B17005679",
+      "ip": "",
+      "host_ip": "ALTMVB3B17005679",
+      "port": 5555,
+      "api_port": 5555,
+      "rpa_port": 5555,
+      "instance_index": 1,
+      "host_index": 1,
+      "status": "在线"
+    }
+  ],
+  "scan_networks": [
+    "192.168.11",
+    "10.0.0",
+    "10.0.1"
+  ],
+  "container_config": {
+    "dns": "8.8.8.8",
+    "model": "",
+    "random_model": 0,
+    "static_model": 0,
+    "custom_model_list": "",
+    "rebuild_mode": "不重建",
+    "max_failures": "3",
+    "gms": 0,
+    "region": "美国 (USA) (默认)",
+    "bridge_mode": 0,
+    "image_version": "",
+    "image_keyword": "P14",
+    "online_models": {},
+    "model_presets": {}
+  },
+  "script_config": {
+    "name_lang": "中文",
+    "country": "",
+    "char_mode": 0,
+    "pwd_mode": "prefix",
+    "pwd_prefix": "",
+    "pwd_custom": "",
+    "skip_count": "0",
+    "tiktok_mode": "phone",
+    "jump_mode": 0,
+    "channel3_mode": 0,
+    "channel1_mode": 0,
+    "accessibility_mode": 0,
+    "authorized_enterprise": 0,
+    "upload_platform": 0,
+    "platform_phone": 0,
+    "platform_name": "tg",
+    "platform_api_key": "",
+    "platform_country": "187",
+    "platform_service": "wb",
+    "platform_provider_ids": "216"
+  },
+  "device_custom_names": {
+    "4EV0222B17004876": "000",
+    "ALTMVB3B17005679": "我自己的手机"
+  },
+  "phones": [],
+  "emails": [],
+  "visas": [],
+  "visa_checked_state": {},
+  "visa_sync_manager": {}
+}
