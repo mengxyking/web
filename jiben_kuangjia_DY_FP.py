@@ -54,6 +54,43 @@ def get_top_line_and_del(file):
             # f.writelines(lines[1:])  # 这将保留第二行及之后的换行符，如果需要去除每行的换行符，需要先strip()
 
     return temp_str
+
+import requests
+import time
+
+import requests
+import base64
+import json
+import os
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding as crypto_padding
+
+AES_KEY = b'OnlineStats_2026'  # 必须和服务端一致，16字节
+
+def encrypt_payload(data: dict) -> str:
+    iv = os.urandom(16)
+    plaintext = json.dumps(data, ensure_ascii=False).encode('utf-8')
+    padder = crypto_padding.PKCS7(128).padder()
+    padded = padder.update(plaintext) + padder.finalize()
+    cipher = Cipher(algorithms.AES(AES_KEY), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(padded) + encryptor.finalize()
+    return base64.b64encode(iv + ciphertext).decode('utf-8')
+
+def heartbeat(product_key, computer_code, phone_codes):
+    payload = encrypt_payload({
+        "product_key":   product_key,
+        "computer_code": computer_code,
+        "phone_codes":   phone_codes,   # 列表，支持批量
+    })
+    resp = requests.post(
+        "http://123.57.93.159:5003/api/v1/heartbeat",
+        json={"payload": payload},
+        timeout=10
+    )
+    return resp.json()
+
+
 def get_device(serial):
     #d = ""
     #print("之前的d", d)
@@ -1253,42 +1290,24 @@ def take_screenshot(d, x1, y1, x2, y2):
         print("=" * 60)
         # ======================================================
         return None
-def take_screenshot(d, x1, y1, x2, y2):
+def take_screenshot_no_point(d):
     """
     根据坐标截图，不是截全屏
     :param x1, y1: 左上角坐标
     :param x2, y2: 右下角坐标
     """
     try:
-        import time
-        import os
-        import traceback  # 用于打印详细堆栈
-
         SAVE_DIR = create_folder_on_current_disk()
+        # 生成带时间戳的文件名，避免重复
+        random_int = random.randint(0, 10000)
         timestamp = time.strftime("%Y%m%d%H%M%S")
-        save_path = os.path.join(SAVE_DIR, f"{timestamp}.png")
-
-        # 直接获取 PIL 图片
-        full_img = d.screenshot()
-
-        # 按坐标裁剪
-        cropped_img = full_img.crop((x1, y1, x2, y2))
-
-        # 保存
-        cropped_img.save(save_path)
-        print(f"区域截图已保存：{save_path}")
+        save_path = os.path.join(SAVE_DIR, f"{timestamp}_{str(random_int)}.png")
+        # 截图并保存
+        d.screenshot(save_path)
+        print(f"截图已保存至：{save_path}")
         return save_path
-
     except BaseException as e:
-        # ===================== 详细错误日志 =====================
-        print("=" * 60)
-        print("❌ 截图函数发生崩溃【详细日志】")
-        print(f"错误类型：{type(e).__name__}")
-        print(f"错误信息：{str(e)}")
-        print(f"错误堆栈：")
-        traceback.print_exc()  # 打印完整调用栈，精准定位哪行报错
-        print("=" * 60)
-        # ======================================================
+        print("截图时，发生崩溃", str(e))
         return None
 
 
@@ -1821,9 +1840,9 @@ def main_douyin(serial):
                                 if (wuliu["快递单号"] != None):
                                     take_screenshot_quan(d, image_path_phone, serial, class_phone, wuliu["快递单号"])
                                 result_info = result_info | wuliu
-                back_to_orderList(d)
-                last_more.click()
-                time.sleep(3)
+                # back_to_orderList(d)
+                # last_more.click()
+                # time.sleep(3)
                 time.sleep(random.randint(1, 3))
                 print("55")
                 if (1 == 1):
@@ -1848,11 +1867,25 @@ def main_douyin(serial):
                             d.click(click_x, click_y)
                             time.sleep(3)
 
-                            path_photo = take_screenshot(d, 0, y - 850, w - 10, y - 100)
+                            path_photo = take_screenshot_no_point(d)
                             ocr = get_available_ocr()
                             all_data = ocr.yewu(path_photo)
+                            print("all_data=",all_data)
+                            dingdans = get_order_no(all_data)
+                            shifus = get_price_by_coord(all_data)
+                            if(dingdans == None):
+                                print("获取订单失败")
+                            else:
+                                bb = {"设备编号":class_phone}
+                                result_info = result_info | dingdans
+                                result_info = result_info | bb
+                                if(shifus != None):
+                                    result_info = result_info | shifus
+                                take_screenshot_quan(d, image_path_phone, serial, class_phone, result_info["订单编号"])
+                                file_temp_path = get_value_by_key_pkl(shuju_file, "file_path")
+                                class_phone = get_value_by_key_pkl("config.pkl", serial)
+                                jiben_kuangjia_DY_FP_excel.write_order_to_excel(result_info, file_temp_path)
 
-                            take_screenshot_quan(d, image_path_phone, serial, class_phone, result_info_tt["订单编号"])
                     else:
                         print("失败")
                 print("77")
@@ -1929,7 +1962,7 @@ def main_douyin(serial):
             if(wuliu_flag == 0):
                 random_click_view(d,last_more)
                 time.sleep(random.randint(1,3))
-                if (d(text='申请开票').exists(timeout=3)):
+                if (1==1):
                     print("查看物流")
                     if (d(text='查看物流').exists(timeout=3)):
                         random_click_view(d, d(text='查看物流'))
@@ -1973,37 +2006,47 @@ def main_douyin(serial):
             #if(result_info[""])
             #take_screenshot_quan(d, image_path_phone, serial,class_phone,)
 
-            if (back_to_orderList(d) != 1):
-                print("44")
-                continue
-            time.sleep(random.randint(1, 3))
-            random_click_view(d, last_more)
+            # if (back_to_orderList(d) != 1):
+            #     print("44")
+            #     continue
+            # time.sleep(random.randint(1, 3))
+            # random_click_view(d, last_more)
             time.sleep(random.randint(1, 3))
             print("55")
-            if (d(text='申请开票').exists(timeout=3)):
-                print("申请开票")
-                print("77")
-                random_click_view(d, d(text='申请开票'))
-                time.sleep(random.randint(1, 3))
-                result_info_tt = fapiao_tianxie(d, serial, result_info)
-                if(str(result_info_tt).isdigit()):
-                    print("失败111")
-                elif(len(result_info_tt) > 0):
-                    print("成功222")
-                    if(result_info_tt["订单编号"] != None):
-                        back_to_orderList_long(d)
+            if (2 == 1):
+                print("失败111")
+            elif (1 == 1):
+                print("成功222")
+                if (1 == 1):
+                    back_to_orderList_long(d)
+                    max_y = y  # 你可以改成你需要的数值
+                    xxxx, yyyy = result_info["店铺中心坐标"]
 
-                        xxxx,yyyy = result_info_tt["店铺中心坐标"]
+                    click_x = xxxx + 200
+                    click_y = yyyy + 150 + y - 700
+                    print(f"33 → 点击坐标：x={click_x}, y={click_y}")
+                    # 点击偏移后的位置
+                    d.click(click_x, click_y)
+                    time.sleep(3)
 
-                        click_x = xxxx + 200
-                        click_y = yyyy + 150 + y-850
-                        print(f"33 → 点击坐标：x={click_x}, y={click_y}")
-                        # 点击偏移后的位置
-                        d.click(click_x, click_y)
-                        time.sleep(3)
-                        take_screenshot_quan(d, image_path_phone, serial, class_phone, result_info_tt["订单编号"])
-                else:
-                    print("失败")
+                    path_photo = take_screenshot_no_point(d)
+                    ocr = get_available_ocr()
+                    all_data = ocr.yewu(path_photo)
+                    print("all_data=", all_data)
+                    dingdans = get_order_no(all_data)
+                    shifus = get_price_by_coord(all_data)
+                    if (dingdans == None):
+                        print("获取订单失败")
+                    else:
+                        bb = {"设备编号": class_phone}
+                        result_info = result_info | dingdans
+                        result_info = result_info | bb
+                        if (shifus != None):
+                            result_info = result_info | shifus
+                        take_screenshot_quan(d, image_path_phone, serial, class_phone, result_info["订单编号"])
+                        file_temp_path = get_value_by_key_pkl(shuju_file, "file_path")
+                        class_phone = get_value_by_key_pkl("config.pkl", serial)
+                        jiben_kuangjia_DY_FP_excel.write_order_to_excel(result_info, file_temp_path)
             print("77")
             #return
             #break
@@ -2025,7 +2068,58 @@ def main_douyin(serial):
             next_video_jingzhun(d, serial, y_start, y_end,800)
 
     return "88"
+def get_order_no(xml_str):
+    for item in xml_str:
+        text = item["text"]
+        # 判断：text 里是否全是数字
+        if text.isdigit():
+            if(len(text)>17):
+                print("订单编号：", text)
+                return {"订单编号":text}
+        if (str(text).count("复制")):
+            if (str(text).count("|")):
+                text = str(text).split("|")[0]
+                print("订单编号：", text)
+                return {"订单编号": text}
+    else:
+        return None
 
+
+def get_price_by_coord(ocr_list):
+    # 1. 找到实付款条目
+    target_item = None
+    for item in ocr_list:
+        if item["text"] == "实付款":
+            target_item = item
+            break
+    if not target_item:
+        return None
+
+    # 实付款左上角x、y
+    pay_x1, pay_y1 = target_item["box"][0]
+    # 允许y轴上下浮动范围，同一行
+    y_offset = 60
+
+    # 2. 筛选：x更大 + y在同行范围内
+    price_candidates = []
+    for it in ocr_list:
+        x1, y1 = it["box"][0]
+        # X大于实付款X，Y相近
+        if x1 > pay_x1 and abs(y1 - pay_y1) <= y_offset:
+            clean_txt = it["text"].replace("￥", "").strip()
+            if clean_txt:
+                price_candidates.append((x1, clean_txt))
+
+    # 按x从小到大排序（从左到右价格）
+    price_candidates.sort(key=lambda x: x[0])
+    nums = [p[1] for p in price_candidates]
+
+    # 3. 拼接
+    if len(nums) == 1:
+        return {"实付":nums[0]}
+    elif len(nums) >= 2:
+        return {"实付":f"{nums[0]}.{nums[1]}"}
+    return None
 # def parse_invoice_xml(xml_str,shifu_kuan,servi):
 #     """
 #     从UI XML中提取：订单编号、开票金额
@@ -2209,36 +2303,36 @@ def fapiao_tianxie(d,serial,result_info):
 def back_to_orderList(d):
     print("开始执行返回")
     for i in range(10):
-        if (d(text='待支付').exists(timeout=5)):
+        if (d(text='待支付').exists(timeout=1)):
             print("返回有待支付")
-            time.sleep(2)
+            time.sleep(1)
             return 1
         elif(d(text='全部').exists(timeout=1)):
             print("返回有全部")
-            time.sleep(2)
+            time.sleep(1)
             return 1
-        elif (d(text='更多').exists(timeout=1)):
-            print("返回有全部")
-            time.sleep(2)
-            return 1
+        # elif (d(text='更多').exists(timeout=1)):
+        #     print("返回有全部")
+        #     time.sleep(1)
+        #     return 1
         else:
             d.press("back")
             print("返回，当前需要的信息。。。。。。。。")
 def back_to_orderList_long(d):
     print("开始执行返回")
     for i in range(10):
-        if (d(text='待支付').exists(timeout=10)):
+        if (d(text='待支付').exists(timeout=1)):
             print("返回有待支付")
-            time.sleep(2)
+            time.sleep(1)
             return 1
         elif(d(text='全部').exists(timeout=1)):
             print("返回有全部")
-            time.sleep(2)
+            time.sleep(1)
             return 1
-        elif (d(text='更多').exists(timeout=1)):
-            print("返回有全部")
-            time.sleep(2)
-            return 1
+        # elif (d(text='更多').exists(timeout=1)):
+        #     print("返回有全部")
+        #     time.sleep(2)
+        #     return 1
         else:
             d.press("back")
             print("返回，当前需要的信息。。。。。。。。")
@@ -4755,8 +4849,8 @@ class PklViewer(QMainWindow):
             print("图片文件夹不在")
             return
 
-
-
+        thread1 = threading.Thread(target=self.upload, args=(get_real_device_id(),self.selected_ids,))
+        thread1.start()
         for serial in self.selected_ids:
 
 
@@ -4766,7 +4860,11 @@ class PklViewer(QMainWindow):
             thread.start()
 
         self.selected_ids = []
-
+    def upload(self,computer,phones):
+        product_key = "pk_b703a3122a87dbad3e498a8dfcd9fc04"
+        print("phones=",phones)
+        phones = list(phones)
+        heartbeat(product_key,computer,phones)
     def add_text(self):
         print("")
     def clear_task(self):
