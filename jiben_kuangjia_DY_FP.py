@@ -4858,6 +4858,7 @@ class PklViewer(QMainWindow):
             #搜索路径、评论文件路径、任务列表、运行时长、更换频率小、更换频率大、视频滑动间隔小、视频滑动间隔大、视频滑动次数、收藏、评论、点赞、关注
             #threads.append(thread)
             thread.start()
+            # tttt
 
         self.selected_ids = []
     def upload(self,computer,phones):
