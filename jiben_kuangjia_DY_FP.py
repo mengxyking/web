@@ -1810,11 +1810,11 @@ def main_douyin(serial):
                 print("店铺有名称，继续往下走")
 
                 #先点更多
-                last_more.click()
+                #last_more.click()
                 time.sleep(3)
                 if (1 == 1):
                     print("查看物流")
-                    if (d(text='查看物流').exists(timeout=3)):
+                    if (1==2):
                         random_click_view(d, d(text='查看物流'))
                         time.sleep(random.randint(1, 3))
                         if (d(text='复制').exists(timeout=8)):
@@ -1960,11 +1960,11 @@ def main_douyin(serial):
 
 
             if(wuliu_flag == 0):
-                random_click_view(d,last_more)
-                time.sleep(random.randint(1,3))
+                #random_click_view(d,last_more)
+                #time.sleep(random.randint(1,3))
                 if (1==1):
                     print("查看物流")
-                    if (d(text='查看物流').exists(timeout=3)):
+                    if (1==2):
                         random_click_view(d, d(text='查看物流'))
                         time.sleep(random.randint(1, 3))
                         if (d(text='复制').exists(timeout=8)):
