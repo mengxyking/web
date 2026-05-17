@@ -11,7 +11,6 @@ import uuid
 from datetime import datetime
 
 import numpy as np
-import requests
 from lxml import etree
 
 import psutil
@@ -49,6 +48,26 @@ from typing import Tuple, Optional
 
 # 1. 全局文件读取锁（保护多线程并发读取文件，避免系统句柄竞争）
 file_read_lock = threading.Lock()
+from PIL import Image
+def get_img_color(img_path, x, y):
+    img = Image.open(img_path).convert("RGB")
+    r, g, b = img.getpixel((x, y))
+    hex_str = f"#{r:02x}{g:02x}{b:02x}"
+    return r, g, b
+
+def hex_to_rgb(hex_color):
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+def is_purple_color(color):
+    # 超宽松粉紫范围
+    min_r, min_g, min_b = 208, 105, 225
+    max_r, max_g, max_b = 235, 150, 255
+
+    if isinstance(color, str):
+        color = hex_to_rgb(color)
+    r, g, b = color
+    return min_r <= r <= max_r and min_g <= g <= max_g and min_b <= b <= max_b
 
 def get_available_ocr():
     """获取空闲的OCR对象，没有则等待（轮询ocr1→ocr2）"""
@@ -136,40 +155,6 @@ def find_id_from_area_2(d, x1_1,x2_2, y1_1 ,y2_2):
     print("-----------")
     print(zuobiaodian1)
     return zuobiaodian1
-import json
-import os
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import padding as crypto_padding
-
-AES_KEY = b'OnlineStats_2026'
-def encrypt_payload(data: dict) -> str:
-    iv = os.urandom(16)
-    plaintext = json.dumps(data, ensure_ascii=False).encode('utf-8')
-    padder = crypto_padding.PKCS7(128).padder()
-    padded = padder.update(plaintext) + padder.finalize()
-    cipher = Cipher(algorithms.AES(AES_KEY), modes.CBC(iv))
-    encryptor = cipher.encryptor()
-    ciphertext = encryptor.update(padded) + encryptor.finalize()
-    return base64.b64encode(iv + ciphertext).decode('utf-8')
-
-def heartbeat(product_key, computer_code, phone_codes):
-    try:
-        payload = encrypt_payload({
-            "product_key": product_key,
-            "computer_code": computer_code,
-            "phone_codes": phone_codes,  # 列表，支持批量
-        })
-        resp = requests.post(
-            "http://123.57.93.159:5003/api/v1/heartbeat",
-            json={"payload": payload},
-            timeout=10
-        )
-        return resp.json()
-    except BaseException as e:
-        print(e)
-
-
-
 
 def init_serial_logger(serial):
     """初始化serial对应的日志文件，确保文件存在"""
@@ -1654,12 +1639,29 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                     else:
                                         print(serial + "---------", "第一次不用等小时间", sleep_time_phone)
                                     point = find_id_from_area_2(d,30,500,200,600)
+                                    xxxxxxx,yyyyyyy = 0 , 0
+                                    for uuuu in point:
+                                        xxx,yyy = uuuu
+                                        path_photo = take_screenshot(d)
+                                        print("------------->",get_img_color(path_photo,xxx,yyy))
+                                        write_serial_log(serial, "------------->",get_img_color(path_photo,xxx,yyy))
+
+                                        if is_purple_color(get_img_color(path_photo,xxx,yyy)):
+                                            print(f"✅  在目标紫色范围内！")
+                                            write_serial_log(serial, "在目标紫色范围内", xxx,yyy)
+                                            xxxxxxx = xxx
+                                            yyyyyyy = yyy
+                                            break
+                                        else:
+                                            write_serial_log(serial, "bu在目标紫色范围内", xxx, yyy)
+                                            print(f"❌  不在范围内")
+
 
                                     print("point=",point)
                                     write_serial_log(serial, "point=",point)
 
-                                    if(len(point)>0):
-                                        xx, yy = point[-1]
+                                    if(yyyyyyy != 0):
+                                        xx, yy = xxxxxxx,yyyyyyy
                                         print(f"{serial}---->当前有福袋，第一层")
                                         write_serial_log(serial, str("当前有福袋，第一层"))
 
@@ -4214,10 +4216,6 @@ class PklViewer(QMainWindow):
     def thread_temp(self, tasks):
         print("self.selected_ids--->",self.selected_ids)
         init_time_2 = time.time()
-
-        thread1 = threading.Thread(target=self.upload, args=(get_real_device_id(), self.selected_ids,))
-        thread1.start()
-
         for serial in self.selected_ids:
             init_serial_logger(serial)
             #print("---------------->", get_value_by_key_pkl("config.pkl", serial))
@@ -4238,11 +4236,6 @@ class PklViewer(QMainWindow):
             time.sleep(0.2)
 
         self.selected_ids = []
-    def upload(self,computer,phones):
-        product_key = "pk_cd37c0a9cd36bbe56db8b1c85fea4974"
-        print("phones=",phones)
-        phones = list(phones)
-        heartbeat(product_key,computer,phones)
 
     def add_text(self):
         print("")
