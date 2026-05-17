@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 
 import numpy as np
+import requests
 from lxml import etree
 
 import psutil
@@ -135,6 +136,40 @@ def find_id_from_area_2(d, x1_1,x2_2, y1_1 ,y2_2):
     print("-----------")
     print(zuobiaodian1)
     return zuobiaodian1
+import json
+import os
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding as crypto_padding
+
+AES_KEY = b'OnlineStats_2026'
+def encrypt_payload(data: dict) -> str:
+    iv = os.urandom(16)
+    plaintext = json.dumps(data, ensure_ascii=False).encode('utf-8')
+    padder = crypto_padding.PKCS7(128).padder()
+    padded = padder.update(plaintext) + padder.finalize()
+    cipher = Cipher(algorithms.AES(AES_KEY), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(padded) + encryptor.finalize()
+    return base64.b64encode(iv + ciphertext).decode('utf-8')
+
+def heartbeat(product_key, computer_code, phone_codes):
+    try:
+        payload = encrypt_payload({
+            "product_key": product_key,
+            "computer_code": computer_code,
+            "phone_codes": phone_codes,  # 列表，支持批量
+        })
+        resp = requests.post(
+            "http://123.57.93.159:5003/api/v1/heartbeat",
+            json={"payload": payload},
+            timeout=10
+        )
+        return resp.json()
+    except BaseException as e:
+        print(e)
+
+
+
 
 def init_serial_logger(serial):
     """初始化serial对应的日志文件，确保文件存在"""
@@ -1624,7 +1659,7 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                     write_serial_log(serial, "point=",point)
 
                                     if(len(point)>0):
-                                        xx, yy = point[0]
+                                        xx, yy = point[-1]
                                         print(f"{serial}---->当前有福袋，第一层")
                                         write_serial_log(serial, str("当前有福袋，第一层"))
 
@@ -4179,6 +4214,10 @@ class PklViewer(QMainWindow):
     def thread_temp(self, tasks):
         print("self.selected_ids--->",self.selected_ids)
         init_time_2 = time.time()
+
+        thread1 = threading.Thread(target=self.upload, args=(get_real_device_id(), self.selected_ids,))
+        thread1.start()
+
         for serial in self.selected_ids:
             init_serial_logger(serial)
             #print("---------------->", get_value_by_key_pkl("config.pkl", serial))
@@ -4199,6 +4238,11 @@ class PklViewer(QMainWindow):
             time.sleep(0.2)
 
         self.selected_ids = []
+    def upload(self,computer,phones):
+        product_key = "pk_cd37c0a9cd36bbe56db8b1c85fea4974"
+        print("phones=",phones)
+        phones = list(phones)
+        heartbeat(product_key,computer,phones)
 
     def add_text(self):
         print("")
