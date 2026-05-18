@@ -1810,9 +1810,9 @@ def main_douyin(serial):
                 print("店铺有名称，继续往下走")
 
                 #先点更多
-                #last_more.click()
+                last_more.click()
                 time.sleep(3)
-                if (1 == 1):
+                if (d(text='查看物流').exists(timeout=3)):
                     print("查看物流")
                     if (1==2):
                         random_click_view(d, d(text='查看物流'))
@@ -1964,7 +1964,9 @@ def main_douyin(serial):
                 #time.sleep(random.randint(1,3))
                 if (1==1):
                     print("查看物流")
-                    if (1==2):
+                    last_more.click()
+                    time.sleep(3)
+                    if (d(text='查看物流').exists(timeout=3)):
                         random_click_view(d, d(text='查看物流'))
                         time.sleep(random.randint(1, 3))
                         if (d(text='复制').exists(timeout=8)):
@@ -2303,7 +2305,7 @@ def fapiao_tianxie(d,serial,result_info):
 def back_to_orderList(d):
     print("开始执行返回")
     for i in range(10):
-        if (d(text='待支付').exists(timeout=1)):
+        if (d(text='待支付').exists(timeout=5)):
             print("返回有待支付")
             time.sleep(1)
             return 1
@@ -2321,7 +2323,7 @@ def back_to_orderList(d):
 def back_to_orderList_long(d):
     print("开始执行返回")
     for i in range(10):
-        if (d(text='待支付').exists(timeout=1)):
+        if (d(text='待支付').exists(timeout=8)):
             print("返回有待支付")
             time.sleep(1)
             return 1
