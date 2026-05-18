@@ -226,6 +226,7 @@ class DeviceManageTool:
         self.task_pause_state = {}
 
         # 构建界面
+        self._apply_style()
         self.setup_ui()
         
         # 启动日志处理
@@ -240,6 +241,119 @@ class DeviceManageTool:
         # 启动自动扫描 (延迟500ms等待界面加载)
         self.root.after(500, self.scan_devices)
     
+    def _apply_style(self):
+        """应用现代专业 UI 样式"""
+        C = {
+            "bg":       "#f0f2f5",
+            "panel":    "#ffffff",
+            "header":   "#1a237e",
+            "header2":  "#283593",
+            "accent":   "#1565c0",
+            "success":  "#2e7d32",
+            "danger":   "#c62828",
+            "warning":  "#e65100",
+            "muted":    "#78909c",
+            "text":     "#1c2b4a",
+            "border":   "#dde3ee",
+            "row_odd":  "#f4f7ff",
+            "row_even": "#ffffff",
+            "sel":      "#bbdefb",
+        }
+        self._C = C
+
+        self.root.configure(bg=C["bg"])
+
+        s = ttk.Style(self.root)
+        s.theme_use("clam")
+
+        # ── 基础 ──────────────────────────────────────────────────────
+        s.configure(".", background=C["bg"], foreground=C["text"],
+                    font=("PingFang SC", 10))
+        s.configure("TFrame",     background=C["bg"])
+        s.configure("TLabel",     background=C["bg"], foreground=C["text"])
+        s.configure("TPanedwindow", background=C["bg"])
+
+        # ── LabelFrame ────────────────────────────────────────────────
+        s.configure("TLabelframe", background=C["panel"],
+                    relief="groove", borderwidth=1, bordercolor=C["border"])
+        s.configure("TLabelframe.Label",
+                    background=C["panel"],
+                    foreground=C["accent"],
+                    font=("PingFang SC", 10, "bold"))
+
+        # ── Notebook ──────────────────────────────────────────────────
+        s.configure("TNotebook", background=C["bg"], borderwidth=0,
+                    tabmargins=[2, 4, 0, 0])
+        s.configure("TNotebook.Tab",
+                    background="#dde8f8", foreground=C["muted"],
+                    padding=[16, 7], font=("PingFang SC", 10),
+                    borderwidth=0)
+        s.map("TNotebook.Tab",
+              background=[("selected", C["accent"]), ("active", "#c5d8f5")],
+              foreground=[("selected", "white"), ("active", C["text"])])
+
+        # ── Treeview ──────────────────────────────────────────────────
+        s.configure("Treeview",
+                    background=C["panel"],
+                    fieldbackground=C["panel"],
+                    foreground=C["text"],
+                    rowheight=30,
+                    font=("PingFang SC", 10),
+                    borderwidth=0,
+                    relief="flat")
+        s.configure("Treeview.Heading",
+                    background=C["header"],
+                    foreground="white",
+                    font=("PingFang SC", 10, "bold"),
+                    relief="flat",
+                    padding=[6, 8])
+        s.map("Treeview",
+              background=[("selected", C["sel"])],
+              foreground=[("selected", C["text"])])
+        s.map("Treeview.Heading",
+              background=[("active", C["header2"])])
+
+        # ── Button ────────────────────────────────────────────────────
+        for name, bg, active in (
+            ("TButton",           C["accent"],  "#0d47a1"),
+            ("Success.TButton",   C["success"], "#1b5e20"),
+            ("Danger.TButton",    C["danger"],  "#b71c1c"),
+            ("Warning.TButton",   C["warning"], "#bf360c"),
+            ("Muted.TButton",     C["muted"],   "#546e7a"),
+        ):
+            s.configure(name, background=bg, foreground="white",
+                        relief="flat", padding=[11, 6],
+                        font=("PingFang SC", 10), borderwidth=0)
+            s.map(name,
+                  background=[("active", active), ("pressed", active)],
+                  relief=[("pressed", "flat")])
+
+        # ── Entry / Combobox / Text ───────────────────────────────────
+        s.configure("TEntry",
+                    fieldbackground="white", relief="flat",
+                    borderwidth=1, padding=5, bordercolor=C["border"])
+        s.configure("TCombobox",
+                    fieldbackground="white", relief="flat",
+                    borderwidth=1, padding=4)
+        s.configure("TScrollbar",
+                    background=C["border"], troughcolor=C["bg"],
+                    relief="flat", arrowsize=13)
+        s.configure("TCheckbutton",
+                    background=C["panel"], foreground=C["text"])
+        s.configure("TRadiobutton",
+                    background=C["panel"], foreground=C["text"])
+
+        # Treeview 交替行颜色
+        self.root.after(200, self._setup_tree_tags)
+
+    def _setup_tree_tags(self):
+        """设置 Treeview 交替行颜色"""
+        if hasattr(self, "device_tree"):
+            self.device_tree.tag_configure("odd",     background="#f4f7ff")
+            self.device_tree.tag_configure("even",    background="#ffffff")
+            self.device_tree.tag_configure("online",  foreground="#1b5e20", font=("PingFang SC", 10, "bold"))
+            self.device_tree.tag_configure("offline", foreground="#c62828")
+
     def _get_local_ip(self):
         """获取本机局域网IP"""
         try:
@@ -303,8 +417,39 @@ class DeviceManageTool:
     
     def setup_ui(self):
         """构建用户界面"""
-        # 主框架
-        main_frame = ttk.Frame(self.root, padding=5)
+        C = getattr(self, "_C", {})
+
+        # ── 顶部品牌栏 ───────────────────────────────────────────────
+        header = tk.Frame(self.root, bg=C.get("header", "#1a237e"), height=56)
+        header.pack(fill=tk.X, side=tk.TOP)
+        header.pack_propagate(False)
+
+        # 左侧图标块
+        icon_block = tk.Frame(header, bg=C.get("header2", "#283593"), width=56, height=56)
+        icon_block.pack(side=tk.LEFT, fill=tk.Y)
+        icon_block.pack_propagate(False)
+        tk.Label(icon_block, text="⚡", bg=C.get("header2", "#283593"),
+                 fg="white", font=("Arial", 22)).place(relx=0.5, rely=0.5, anchor="center")
+
+        # 标题文字列
+        title_col = tk.Frame(header, bg=C.get("header", "#1a237e"))
+        title_col.pack(side=tk.LEFT, fill=tk.Y, padx=14, pady=8)
+        tk.Label(title_col, text="魔云腾工具箱",
+                 bg=C.get("header", "#1a237e"), fg="white",
+                 font=("PingFang SC", 15, "bold")).pack(anchor="w")
+        tk.Label(title_col, text="Device Management & Automation Platform",
+                 bg=C.get("header", "#1a237e"), fg="#90caf9",
+                 font=("PingFang SC", 9)).pack(anchor="w")
+
+        # 右侧版本标签
+        right_info = tk.Frame(header, bg=C.get("header", "#1a237e"))
+        right_info.pack(side=tk.RIGHT, padx=18, fill=tk.Y)
+        tk.Label(right_info, text="v 1.0",
+                 bg=C.get("header", "#1a237e"), fg="#90caf9",
+                 font=("PingFang SC", 10)).pack(side=tk.BOTTOM, pady=8)
+
+        # ── 主框架 ───────────────────────────────────────────────────
+        main_frame = ttk.Frame(self.root, padding=6)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # 顶级主选项卡
@@ -371,9 +516,13 @@ class DeviceManageTool:
         
         btn_frame = ttk.Frame(left_frame)
         btn_frame.pack(fill=tk.X, pady=(10, 0))
-        self.scan_button = ttk.Button(btn_frame, text="🔍 扫描设备", command=self.scan_devices, width=15)
+        self.scan_button = ttk.Button(btn_frame, text="🔍 扫描设备",
+                                      command=self.scan_devices, width=15,
+                                      style="Success.TButton")
         self.scan_button.pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="☑ 全选/取消", command=self.toggle_all_selection, width=12).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="☑ 全选/取消",
+                   command=self.toggle_all_selection, width=12,
+                   style="Muted.TButton").pack(side=tk.LEFT, padx=5)
         
         # 右侧：任务执行中心
         right_view = ttk.Frame(self.paned_window, padding=5)
@@ -401,9 +550,17 @@ class DeviceManageTool:
         self._setup_script_config_tab(self.script_config_tab)
 
         # 1.3 日志
-        log_frame = ttk.LabelFrame(right_view, text="运行日志", padding=10)
+        log_frame = ttk.LabelFrame(right_view, text="运行日志", padding=8)
         log_frame.pack(fill=tk.BOTH, expand=True)
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=15, width=40, font=("Consolas", 9))
+        self.log_text = scrolledtext.ScrolledText(
+            log_frame, height=15, width=40,
+            font=("Menlo", 9),
+            bg="#1e2433", fg="#a8c7fa",
+            insertbackground="#a8c7fa",
+            selectbackground="#2d4a7a",
+            selectforeground="white",
+            relief="flat", borderwidth=0,
+        )
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # ==================== Tab 2: 手机中心 ====================
@@ -422,8 +579,13 @@ class DeviceManageTool:
         self._setup_visa_tab(self.visa_tab)
         
         # 状态栏
-        self.status_var = tk.StringVar(value="就绪")
-        status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor="w")
+        self.status_var = tk.StringVar(value="  ●  就绪")
+        status_bar = tk.Label(
+            self.root, textvariable=self.status_var,
+            bg="#1a237e", fg="#90caf9",
+            font=("PingFang SC", 9),
+            anchor="w", padx=12, pady=5,
+        )
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
         # 设置左侧设备列表初始宽度（像素），渲染完成后生效
