@@ -9,7 +9,30 @@
     "proxy_type": "socks5",
     "vpc_node": ""
   },
-  "devices": [],
+  "devices": [
+    {
+      "container_name": "198.18.0.11:5555",
+      "ip": "198.18.0.11",
+      "host_ip": "198.18.0.11",
+      "port": 5555,
+      "api_port": 5555,
+      "rpa_port": 5555,
+      "instance_index": 1,
+      "host_index": 1,
+      "status": "offline"
+    },
+    {
+      "container_name": "198.18.0.2:5555",
+      "ip": "198.18.0.2",
+      "host_ip": "198.18.0.2",
+      "port": 5555,
+      "api_port": 5555,
+      "rpa_port": 5555,
+      "instance_index": 2,
+      "host_index": 2,
+      "status": "offline"
+    }
+  ],
   "scan_networks": [
     "192.168.11",
     "10.0.0",
@@ -33,10 +56,10 @@
   },
   "script_config": {
     "name_lang": "中文",
-    "country": "",
+    "country": "111",
     "char_mode": 0,
     "pwd_mode": "prefix",
-    "pwd_prefix": "",
+    "pwd_prefix": "222",
     "pwd_custom": "",
     "skip_count": "0",
     "tiktok_mode": "phone",
@@ -55,11 +78,40 @@
   },
   "device_custom_names": {
     "4EV0222B17004876": "000",
-    "ALTMVB3B17005679": "我自己的手机"
+    "ALTMVB3B17005679": "我自己的手机",
+    "198.18.0.2:5555": "sdfsdfsd"
   },
   "phones": [],
   "emails": [],
   "visas": [],
   "visa_checked_state": {},
-  "visa_sync_manager": {}
+  "visa_sync_manager": {},
+  "douyin_config": {
+    "config1": "111",
+    "config2": "",
+    "config3": "",
+    "config4": "",
+    "config5": ""
+  },
+  "kuaishou_config": {
+    "config1": "",
+    "config2": "333",
+    "config3": "",
+    "config4": "",
+    "config5": ""
+  },
+  "xiaohongshu_config": {
+    "config1": "",
+    "config2": "",
+    "config3": "444",
+    "config4": "",
+    "config5": ""
+  },
+  "xianyu_config": {
+    "config1": "",
+    "config2": "",
+    "config3": "",
+    "config4": "",
+    "config5": ""
+  }
 }

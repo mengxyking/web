@@ -528,32 +528,40 @@ class DeviceManageTool:
         right_view = ttk.Frame(self.paned_window, padding=5)
         self.paned_window.add(right_view, weight=2)
         
-        # 1.1 容器配置
-        container_config_frame = ttk.LabelFrame(right_view, text="容器配置中心", padding=5)
-        container_config_frame.pack(fill=tk.X, pady=(0, 5))
-        self._setup_container_config(container_config_frame)
-        
-        # 1.2 功能 Tab
-        self.func_notebook = ttk.Notebook(right_view)
-        self.func_notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
-        
-        self.script_tab = ttk.Frame(self.func_notebook, padding=5)
-        self.func_notebook.add(self.script_tab, text="脚本任务")
-        self._setup_script_tab(self.script_tab)
-        
-        self.socks5_tab = ttk.Frame(self.func_notebook, padding=5)
-        self.func_notebook.add(self.socks5_tab, text="代理网络")
-        self._setup_socks5_tab(self.socks5_tab)
+        # 1.1 隐藏容器配置和代理配置（变量仍需存在，供 save/load 使用）
+        _hidden_cc = ttk.Frame(self.root)
+        self._setup_container_config(_hidden_cc)
+        _hidden_s5 = ttk.Frame(self.root)
+        self._setup_socks5_tab(_hidden_s5)
 
-        self.script_config_tab = ttk.Frame(self.func_notebook, padding=5)
-        self.func_notebook.add(self.script_config_tab, text="脚本配置")
-        self._setup_script_config_tab(self.script_config_tab)
+        # 1.2 主功能 Notebook（6个Tab）
+        self.main_notebook = ttk.Notebook(right_view)
+        self.main_notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
 
-        # 1.3 日志
-        log_frame = ttk.LabelFrame(right_view, text="运行日志", padding=8)
-        log_frame.pack(fill=tk.BOTH, expand=True)
+        _tab_script = ttk.Frame(self.main_notebook, padding=5)
+        self.main_notebook.add(_tab_script, text="脚本配置")
+        self._setup_script_config_tab(self._make_scrollable_tab(_tab_script))
+
+        _tab_douyin = ttk.Frame(self.main_notebook, padding=5)
+        self.main_notebook.add(_tab_douyin, text="抖音养号")
+        self._build_platform_tab(_tab_douyin, "douyin")
+
+        _tab_kuaishou = ttk.Frame(self.main_notebook, padding=5)
+        self.main_notebook.add(_tab_kuaishou, text="快手养号")
+        self._build_platform_tab(_tab_kuaishou, "kuaishou")
+
+        _tab_xiaohongshu = ttk.Frame(self.main_notebook, padding=5)
+        self.main_notebook.add(_tab_xiaohongshu, text="小红书养号")
+        self._build_platform_tab(_tab_xiaohongshu, "xiaohongshu")
+
+        _tab_xianyu = ttk.Frame(self.main_notebook, padding=5)
+        self.main_notebook.add(_tab_xianyu, text="闲鱼任务列表")
+        self._build_platform_tab(_tab_xianyu, "xianyu")
+
+        _tab_log = ttk.Frame(self.main_notebook, padding=3)
+        self.main_notebook.add(_tab_log, text="运行日志")
         self.log_text = scrolledtext.ScrolledText(
-            log_frame, height=15, width=40,
+            _tab_log, height=15, width=40,
             font=("Menlo", 9),
             bg="#1e2433", fg="#a8c7fa",
             insertbackground="#a8c7fa",
@@ -563,20 +571,27 @@ class DeviceManageTool:
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
+        # 1.3 执行按钮栏（固定底部）
+        btn_bar = ttk.Frame(right_view)
+        btn_bar.pack(fill=tk.X, pady=(0, 2))
+        ttk.Button(btn_bar, text="▶ 启动任务", command=self.run_selected_script).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_bar, text="⏸ 暂停/继续", command=self.toggle_pause_selected_script).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_bar, text="⏹ 停止任务", command=self.stop_selected_script).pack(side=tk.LEFT, padx=2)
+
         # ==================== Tab 2: 手机中心 ====================
         self.phone_tab = ttk.Frame(self.root_notebook, padding=10)
-        self.root_notebook.add(self.phone_tab, text=" 手机号管理 ")
+        self.root_notebook.add(self.phone_tab, text=" 更多功能 ")
         self._setup_phone_tab(self.phone_tab)
-
-        # ==================== Tab 3: 邮箱中心 ====================
-        self.email_tab = ttk.Frame(self.root_notebook, padding=10)
-        self.root_notebook.add(self.email_tab, text=" 邮箱管理 ")
-        self._setup_email_tab(self.email_tab)
-
-        # ==================== Tab 4: VISA卡管理 ====================
-        self.visa_tab = ttk.Frame(self.root_notebook, padding=10)
-        self.root_notebook.add(self.visa_tab, text=" VISA卡管理 ")
-        self._setup_visa_tab(self.visa_tab)
+        #
+        # # ==================== Tab 3: 邮箱中心 ====================
+        # self.email_tab = ttk.Frame(self.root_notebook, padding=10)
+        # self.root_notebook.add(self.email_tab, text=" 邮箱管理 ")
+        # self._setup_email_tab(self.email_tab)
+        #
+        # # ==================== Tab 4: VISA卡管理 ====================
+        # self.visa_tab = ttk.Frame(self.root_notebook, padding=10)
+        # self.root_notebook.add(self.visa_tab, text=" VISA卡管理 ")
+        # self._setup_visa_tab(self.visa_tab)
         
         # 状态栏
         self.status_var = tk.StringVar(value="  ●  就绪")
@@ -590,30 +605,32 @@ class DeviceManageTool:
 
         # 设置左侧设备列表初始宽度（像素），渲染完成后生效
         self.root.after(100, lambda: self.paned_window.sashpos(0, 350))
-    def _setup_script_tab(self, parent):
-        """Web UI: 脚本控制Tab"""
-        # 脚本列表
-        list_frame = ttk.LabelFrame(parent, text="可用脚本")
-        list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
-        
-        scrollbar = ttk.Scrollbar(list_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.script_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, font=("Consolas", 10))
-        self.script_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.script_listbox.yview)
-        
-        # 按钮区
-        btn_frame = ttk.Frame(parent)
-        btn_frame.pack(fill=tk.X)
-        
-        ttk.Button(btn_frame, text="🔄 刷新列表", command=self._refresh_script_list).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_frame, text="▶ 启动任务", command=self.run_selected_script).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_frame, text="⏸ 暂停/继续", command=self.toggle_pause_selected_script).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_frame, text="⏹ 停止任务", command=self.stop_selected_script).pack(side=tk.LEFT, padx=2)
-        
-        # 初始加载
-        self._refresh_script_list()
+    def _make_scrollable_tab(self, parent):
+        """在 Tab Frame 内创建可滚动区域，返回内层 Frame 供子 setup 方法填充"""
+        canvas = tk.Canvas(parent, highlightthickness=0)
+        vsb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+        return inner
+
+    def _build_platform_tab(self, parent, prefix, count=5):
+        """为平台 Tab 创建 count 个通用配置行，StringVar 存为 self.{prefix}_cfg{N}"""
+        for i in range(1, count + 1):
+            var = tk.StringVar()
+            setattr(self, f"{prefix}_cfg{i}", var)
+            row = ttk.Frame(parent)
+            row.pack(fill=tk.X, pady=5, padx=8)
+            ttk.Label(row, text=f"配置{i}:", width=8, anchor="w").pack(side=tk.LEFT)
+            e = ttk.Entry(row, textvariable=var)
+            e.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            e.bind("<FocusOut>", lambda ev: self.save_config())
+            e.bind("<Return>", lambda ev: self.save_config())
 
     def _setup_socks5_tab(self, parent):
         """Web UI: SOCKS5配置Tab"""
@@ -1155,30 +1172,21 @@ class DeviceManageTool:
         return self.online_models.get(name, "") # 如果是预设或自定义，返回空字符串
 
     def _refresh_script_list(self):
-        """刷新脚本列表"""
-        self.script_listbox.delete(0, tk.END)
+        """扫描 scripts/ 目录，返回可用脚本列表"""
         base_dir = self._get_app_path()
         scripts_dir = os.path.join(base_dir, "scripts")
-        
         if not os.path.exists(scripts_dir):
             os.makedirs(scripts_dir)
-            
-        # 查找所有 .py 文件
-        files = glob.glob(os.path.join(scripts_dir, "*.py"))
-        for f in files:
-            basename = os.path.basename(f)
-            # 排除 __init__.py
-            if basename == "__init__.py":
-                continue
-            self.script_listbox.insert(tk.END, basename)
+        files = sorted(glob.glob(os.path.join(scripts_dir, "*.py")))
+        return [os.path.basename(f) for f in files if os.path.basename(f) != "__init__.py"]
 
     def run_selected_script(self):
-        """运行选中的脚本"""
-        selection = self.script_listbox.curselection()
-        if not selection:
-             messagebox.showwarning("提示", "请先在列表选择一个脚本")
+        """运行 scripts/ 目录中的脚本"""
+        scripts = self._refresh_script_list()
+        if not scripts:
+             messagebox.showwarning("提示", "scripts/ 目录中没有可用脚本")
              return
-        script_name = self.script_listbox.get(selection[0])
+        script_name = scripts[0]
         script_path = os.path.join(self._get_app_path(), "scripts", script_name)
         
         devices = self.get_selected_devices()
@@ -2499,8 +2507,16 @@ class DeviceManageTool:
             "emails": self.emails,
             "visas": self.visas,
             "visa_checked_state": {str(k): v for k, v in self.visa_checked_state.items()},
-            # 保存VISA同步管理器状态（只保存关键信息）
-            "visa_sync_manager": self._serialize_visa_sync_manager()
+            "visa_sync_manager": self._serialize_visa_sync_manager(),
+            # 平台养号配置
+            **{
+                f"{prefix}_config": {
+                    f"config{i}": getattr(self, f"{prefix}_cfg{i}").get()
+                    for i in range(1, 6)
+                }
+                for prefix in ("douyin", "kuaishou", "xiaohongshu", "xianyu")
+                if hasattr(self, f"{prefix}_cfg1")
+            },
         }
         
         config_path = os.path.join(self._get_app_path(), "config.json")
@@ -2715,6 +2731,14 @@ class DeviceManageTool:
                 self.platform_provider_ids_var.set(s_conf["platform_provider_ids"] or "216")
                 
 
+
+            # 恢复平台养号配置
+            for prefix in ("douyin", "kuaishou", "xiaohongshu", "xianyu"):
+                c = config.get(f"{prefix}_config", {})
+                for i in range(1, 6):
+                    attr = f"{prefix}_cfg{i}"
+                    if hasattr(self, attr):
+                        getattr(self, attr).set(c.get(f"config{i}", ""))
 
             self.log_message("✓ 配置已加载")
         except Exception as e:
