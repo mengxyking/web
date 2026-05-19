@@ -2083,6 +2083,10 @@ def get_order_no(xml_str):
                 text = str(text).split("|")[0]
                 print("订单编号：", text)
                 return {"订单编号": text}
+            elif (str(text).count("复制")):
+                text = str(text).split("复制")[0]
+                print("订单编号：", text)
+                return {"订单编号": text}
     else:
         return None
 
@@ -2323,7 +2327,7 @@ def back_to_orderList(d):
 def back_to_orderList_long(d):
     print("开始执行返回")
     for i in range(10):
-        if (d(text='待支付').exists(timeout=8)):
+        if (d(text='待支付').exists(timeout=5)):
             print("返回有待支付")
             time.sleep(1)
             return 1
