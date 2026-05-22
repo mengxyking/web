@@ -119,6 +119,9 @@ class DeviceManageTool:
         self.root.geometry("1100x700")
         self.root.minsize(900, 700)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        # macOS Cmd+Q 不触发 WM_DELETE_WINDOW，用 atexit 兜底保存
+        import atexit
+        atexit.register(self.save_config)
         
         # 设备相关
         self.devices = []
@@ -2475,17 +2478,24 @@ class DeviceManageTool:
         self.root.after(100, self.process_log_queue)
     
     def _on_device_name_double_click(self, event):
-        """双击容器名列弹出编辑框"""
+        """双击设备行：SN码列 → scrcpy 投屏；昵称列 → 编辑昵称"""
         if self.device_tree.identify_region(event.x, event.y) != "cell":
             return
-        if self.device_tree.identify_column(event.x) != "#3":  # 容器名是第3列
-            return
+        col = self.device_tree.identify_column(event.x)
         item = self.device_tree.identify_row(event.y)
         if not item:
             return
 
         tags = self.device_tree.item(item, "tags")
-        serial = tags[0] if tags else self.device_tree.item(item, "values")[2]
+        serial = tags[0] if tags else self.device_tree.item(item, "values")[3]
+
+        # 双击 SN码列（第4列）→ 启动 scrcpy 投屏
+        if col == "#4":
+            self._launch_scrcpy(serial)
+            return
+
+        if col != "#3":  # 非昵称列不处理
+            return
         current_name = self.device_custom_names.get(serial, serial)
 
         win = tk.Toplevel(self.root)
@@ -2530,6 +2540,32 @@ class DeviceManageTool:
         btn_frame.pack(fill=tk.X, padx=12, pady=(0, 8))
         ttk.Button(btn_frame, text="保存", command=_save, width=8).pack(side=tk.LEFT, padx=(0, 6))
         ttk.Button(btn_frame, text="取消", command=win.destroy, width=8).pack(side=tk.LEFT)
+
+    def _launch_scrcpy(self, serial):
+        """调用 scrcpy 对指定设备投屏（独立窗口，非阻塞）"""
+        if not serial:
+            messagebox.showwarning("投屏", "设备串号为空，无法投屏")
+            return
+        try:
+            import shutil
+            scrcpy_path = shutil.which("scrcpy")
+            if not scrcpy_path:
+                # macOS 常见安装路径兜底
+                for p in ["/usr/local/bin/scrcpy", "/opt/homebrew/bin/scrcpy"]:
+                    if os.path.isfile(p):
+                        scrcpy_path = p
+                        break
+            if not scrcpy_path:
+                messagebox.showerror(
+                    "找不到 scrcpy",
+                    "未检测到 scrcpy，请先安装：\nbrew install scrcpy"
+                )
+                return
+            cmd = [scrcpy_path, "-s", serial, "--window-title", f"投屏 {serial}"]
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.log_message(f"📱 scrcpy 已启动 → {serial}")
+        except Exception as e:
+            messagebox.showerror("投屏失败", str(e))
 
     def on_treeview_click(self, event):
         """处理树形视图点击事件"""
@@ -3273,6 +3309,9 @@ class DeviceManageTool:
     # ==================== 配置管理 ====================
     def save_config(self):
         """保存配置"""
+        # 加载期间禁止写入，避免 trace 回调把默认值覆盖掉已保存的配置
+        if getattr(self, "_loading_config", False):
+            return
         # 获取当前网段设置
         networks_str = self.network_entry.get().strip()
         scan_networks = [n.strip() for n in networks_str.replace('，', ',').split(',') if n.strip()]
@@ -3375,7 +3414,8 @@ class DeviceManageTool:
         config_path = os.path.join(self._get_app_path(), "config.json")
         if not os.path.exists(config_path):
             return
-        
+
+        self._loading_config = True
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
@@ -3629,7 +3669,9 @@ class DeviceManageTool:
             self.log_message("✓ 配置已加载")
         except Exception as e:
             self.log_message(f"加载配置失败: {e}")
-    
+        finally:
+            self._loading_config = False
+
     # ==================== 文件服务器 ====================
     def _start_file_server(self):
         """启动本地文件服务器"""
