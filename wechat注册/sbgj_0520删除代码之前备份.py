@@ -34,9 +34,31 @@ try:
 except ImportError:  # 兼容环境未安装 psutil 的情况
     psutil = None
 
+# SDK Path Setup
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-mytRpc = None
-container_manager = None
+SDK_DIR = os.path.join(CURRENT_DIR, "MYT_RPA_SDK_v10_1_20251009", "demo_py_x64")
+if os.path.exists(SDK_DIR):
+    sys.path.insert(0, SDK_DIR)
+    sys.path.insert(0, os.path.join(SDK_DIR, "common"))
+    print(f"SDK path added: {SDK_DIR}")
+else:
+    print(f"Warning: SDK path not found: {SDK_DIR}")
+
+try:
+    from common import mytRpc  # type: ignore
+except ImportError:
+    print("Warning: Failed to import mytRpc")
+    mytRpc = None
+
+# Import Container Manager
+try:
+    framework_path = os.path.join(CURRENT_DIR, "scripts", "framework")
+    if framework_path not in sys.path:
+        sys.path.append(framework_path)
+    import container_manager  # type: ignore
+except ImportError:
+    print("Warning: Failed to import container_manager")
+    container_manager = None
 
 
 class VideoStreamServer:
@@ -115,13 +137,10 @@ class DeviceManageTool:
     
     def __init__(self):
         self.root = TkinterDnD.Tk()  # 使用TkinterDnD支持拖放
-        self.root.title("测试工具 v1.0")
+        self.root.title("魔云腾工具箱 v1.0")
         self.root.geometry("1100x700")
         self.root.minsize(900, 700)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
-        # macOS Cmd+Q 不触发 WM_DELETE_WINDOW，用 atexit 兜底保存
-        import atexit
-        atexit.register(self.save_config)
         
         # 设备相关
         self.devices = []
@@ -145,22 +164,10 @@ class DeviceManageTool:
         # 手机号信息
         self.phones = []  # 存储手机号记录: {"phone": str, "url": str, "usage": str, "status": str, "time": str}
         self.emails = []  # 存储邮箱记录: {"email": str, "password": str, "usage": str, "status": str}
-        self.custom_open_apps = []  # 用户手动添加的应用 [{"name": str, "package": str}]
         self.phone_lock = threading.Lock()  # 确保多个脚本并发获取手机号/邮箱时不重复
 
-        # 监控自动点击
-        self.watch_rules = []  # [{"keyword": tk.StringVar}]
-        self._watch_stop_event = threading.Event()
-        self._watch_thread = None
-        self._watch_interval_var = tk.StringVar(value="1.0")
-
-        # 多脚本管理
-        self.script_profiles = [{"name": "默认脚本", "steps": [], "watch_rules": [], "watch_interval": "1.0"}]
-        self.active_profile_idx = 0
-        self._profile_name_var = tk.StringVar(value="默认脚本")
-
         # --- 平台取号配置（脚本配置Tab） ---
-        # 启用后：脚本从本地 /get_phone 接口取号时，将实时从平台获取，不再从"手机号管理"列表分发
+        # 启用后：脚本从本地 /get_phone 接口取号时，将实时从平台获取，不再从“手机号管理”列表分发
         self.platform_phone_var = tk.IntVar(value=0)  # 1=平台取号，0=手机号管理取号
         self.platform_name_var = tk.StringVar(value="tg")  # 平台名称：tg（Tiger SMS）
         self.platform_api_key_var = tk.StringVar(value="")  # 平台 key
@@ -212,15 +219,11 @@ class DeviceManageTool:
         
         # 日志队列
         self.log_queue = queue.Queue()
-        self._tab_log_texts = []  # 各Tab日志框，统一接收日志广播
-
+        
         # 运行中的任务
         self.running_tasks = {}  # {device_key: subprocess.Popen}
         # 任务暂停状态：key 与 running_tasks 一致，值为 True 表示已暂停
         self.task_pause_state = {}
-        # 自定义脚本暂停/停止控制
-        self._cs_pause_event = threading.Event()   # set = 暂停中
-        self._cs_stop_event  = threading.Event()   # set = 请求停止
 
         # 构建界面
         self._apply_style()
@@ -271,10 +274,10 @@ class DeviceManageTool:
         s.configure("TPanedwindow", background=C["bg"])
 
         # ── LabelFrame ────────────────────────────────────────────────
-        s.configure("TLabelframe", background=C["bg"],
+        s.configure("TLabelframe", background=C["panel"],
                     relief="groove", borderwidth=1, bordercolor=C["border"])
         s.configure("TLabelframe.Label",
-                    background=C["bg"],
+                    background=C["panel"],
                     foreground=C["accent"],
                     font=("PingFang SC", 10, "bold"))
 
@@ -336,9 +339,9 @@ class DeviceManageTool:
                     background=C["border"], troughcolor=C["bg"],
                     relief="flat", arrowsize=13)
         s.configure("TCheckbutton",
-                    background=C["bg"], foreground=C["text"])
+                    background=C["panel"], foreground=C["text"])
         s.configure("TRadiobutton",
-                    background=C["bg"], foreground=C["text"])
+                    background=C["panel"], foreground=C["text"])
 
         # Treeview 交替行颜色
         self.root.after(200, self._setup_tree_tags)
@@ -346,14 +349,10 @@ class DeviceManageTool:
     def _setup_tree_tags(self):
         """设置 Treeview 交替行颜色"""
         if hasattr(self, "device_tree"):
-            style = ttk.Style()
-            style.configure("Treeview", rowheight=34)
-            self.device_tree.tag_configure("odd",         background="#f4f7ff")
-            self.device_tree.tag_configure("even",        background="#ffffff")
-            self.device_tree.tag_configure("online",      foreground="#1b5e20", font=("PingFang SC", 11, "bold"))
-            self.device_tree.tag_configure("offline",     foreground="#c62828")
-            self.device_tree.tag_configure("placeholder", foreground="#aaaaaa")
-            self.device_tree.tag_configure("checked_row", background="#bfdbfe", foreground="#1d4ed8")
+            self.device_tree.tag_configure("odd",     background="#f4f7ff")
+            self.device_tree.tag_configure("even",    background="#ffffff")
+            self.device_tree.tag_configure("online",  foreground="#1b5e20", font=("PingFang SC", 10, "bold"))
+            self.device_tree.tag_configure("offline", foreground="#c62828")
 
     def _get_local_ip(self):
         """获取本机局域网IP"""
@@ -435,7 +434,7 @@ class DeviceManageTool:
         # 标题文字列
         title_col = tk.Frame(header, bg=C.get("header", "#1a237e"))
         title_col.pack(side=tk.LEFT, fill=tk.Y, padx=14, pady=8)
-        tk.Label(title_col, text="测试工具",
+        tk.Label(title_col, text="魔云腾工具箱",
                  bg=C.get("header", "#1a237e"), fg="white",
                  font=("PingFang SC", 15, "bold")).pack(anchor="w")
         tk.Label(title_col, text="Device Management & Automation Platform",
@@ -467,7 +466,7 @@ class DeviceManageTool:
         
         # 左侧：设备列表
         left_frame = ttk.LabelFrame(self.paned_window, text="设备列表", padding=5)
-        self.paned_window.add(left_frame, weight=1)
+        self.paned_window.add(left_frame, weight=1)  # 左侧权重1
         
         # ADB 模式提示（network_entry 保留但不显示，供 save/load_config 兼容）
         net_frame = ttk.Frame(left_frame)
@@ -485,17 +484,17 @@ class DeviceManageTool:
         self.device_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=15)
         
         # 设置列
-        self.device_tree.heading("选择", text="⬜")
+        self.device_tree.heading("选择", text="☐")
         self.device_tree.heading("序号", text="序号")
         self.device_tree.heading("设备昵称", text="设备昵称")
         self.device_tree.heading("手机SN码", text="手机SN码")
         self.device_tree.heading("状态", text="状态")
         
-        self.device_tree.column("选择", width=40, anchor="center", minwidth=30)
-        self.device_tree.column("序号", width=40, anchor="center", minwidth=30)
-        self.device_tree.column("设备昵称", width=80, anchor="center", minwidth=60)
-        self.device_tree.column("手机SN码", width=135, anchor="center", minwidth=100)
-        self.device_tree.column("状态", width=60, anchor="center", minwidth=50)
+        self.device_tree.column("选择", width=40, anchor="center")
+        self.device_tree.column("序号", width=50, anchor="center")
+        self.device_tree.column("设备昵称", width=120)
+        self.device_tree.column("手机SN码", width=200)
+        self.device_tree.column("状态", width=80, anchor="center")
         
         # 滚动条
         scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.device_tree.yview)
@@ -545,49 +544,34 @@ class DeviceManageTool:
         _script_paned.pack(fill=tk.BOTH, expand=True)
         _script_top = ttk.Frame(_script_paned)
         _script_paned.add(_script_top, weight=1)
-        _scroll_inner = self._make_scrollable_tab(_script_top)
-        self._setup_custom_script_shortcut_bar(_scroll_inner)
-        self._setup_open_app_bar(_scroll_inner)
-        self._setup_coord_tap_bar(_scroll_inner)
-        self._setup_input_text_bar(_scroll_inner)
-        self._setup_click_text_bar(_scroll_inner)
-        self._setup_push_file_bar(_scroll_inner)
-        self._setup_pull_file_bar(_scroll_inner)
-        self._setup_screenshot_bar(_scroll_inner)
-        self._setup_install_apk_bar(_scroll_inner)
-        self._setup_script_config_tab(_scroll_inner)
+        self._setup_script_config_tab(self._make_scrollable_tab(_script_top))
         _script_log_frame = ttk.LabelFrame(_script_paned, text="运行日志", padding=3)
-        _script_paned.add(_script_log_frame, weight=0)
+        _script_paned.add(_script_log_frame, weight=1)
         self.script_log_text = scrolledtext.ScrolledText(
-            _script_log_frame, height=3, width=40,
+            _script_log_frame, height=8, width=40,
             font=("Menlo", 9),
             bg="#1e2433", fg="#a8c7fa",
             insertbackground="#a8c7fa",
             selectbackground="#2d4a7a",
             selectforeground="white",
             relief="flat", borderwidth=0,
-            state=tk.DISABLED,
         )
         self.script_log_text.pack(fill=tk.BOTH, expand=True)
 
-        self._tab_custom_script = ttk.Frame(self.main_notebook, padding=5)
-        self.main_notebook.add(self._tab_custom_script, text="自定义脚本")
-        self._build_custom_script_tab(self._tab_custom_script)
-
         _tab_douyin = ttk.Frame(self.main_notebook, padding=5)
-        self.main_notebook.add(_tab_douyin, text="1")
+        self.main_notebook.add(_tab_douyin, text="抖音养号")
         self._build_platform_tab(_tab_douyin, "douyin")
 
         _tab_kuaishou = ttk.Frame(self.main_notebook, padding=5)
-        self.main_notebook.add(_tab_kuaishou, text="2")
+        self.main_notebook.add(_tab_kuaishou, text="快手养号")
         self._build_platform_tab(_tab_kuaishou, "kuaishou")
 
         _tab_xiaohongshu = ttk.Frame(self.main_notebook, padding=5)
-        self.main_notebook.add(_tab_xiaohongshu, text="3")
+        self.main_notebook.add(_tab_xiaohongshu, text="小红书养号")
         self._build_platform_tab(_tab_xiaohongshu, "xiaohongshu")
 
         _tab_xianyu = ttk.Frame(self.main_notebook, padding=5)
-        self.main_notebook.add(_tab_xianyu, text="4")
+        self.main_notebook.add(_tab_xianyu, text="闲鱼任务列表")
         self._build_platform_tab(_tab_xianyu, "xianyu")
 
         _tab_log = ttk.Frame(self.main_notebook, padding=3)
@@ -600,7 +584,6 @@ class DeviceManageTool:
             selectbackground="#2d4a7a",
             selectforeground="white",
             relief="flat", borderwidth=0,
-            state=tk.DISABLED,
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
@@ -637,1261 +620,10 @@ class DeviceManageTool:
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
         # 设置左侧设备列表初始宽度（像素），渲染完成后生效
-        self.root.after(100, lambda: self.paned_window.sashpos(0, 400))
-    # ── 预置应用包名表 ──────────────────────────────────────────
-    _PRESET_APPS = {
-        "抖音":   "com.ss.android.ugc.aweme",
-        "快手":   "com.smile.gifmaker",
-        "小红书": "com.xingin.xhs",
-        "闲鱼":  "com.taobao.idlefish",
-        "微信":  "com.tencent.mm",
-        "微博":  "com.sina.weibo",
-        "淘宝":  "com.taobao.taobao",
-        "拼多多": "com.xunmeng.pinduoduo",
-    }
-
-    def _setup_custom_script_shortcut_bar(self, parent):
-        """脚本配置Tab：快捷跳转到自定义脚本Tab的横条"""
-        bar = ttk.Frame(parent)
-        bar.pack(fill=tk.X, pady=(0, 8), padx=2)
-        btn = tk.Label(
-            bar, text="✦  点击开始自定义脚本  ✦",
-            font=("PingFang SC", 11, "bold"),
-            bg="#3b5bdb", fg="white",
-            cursor="hand2",
-            padx=12, pady=8,
-        )
-        btn.pack(fill=tk.X, expand=True)
-        btn.bind("<Button-1>", lambda e: self.main_notebook.select(self._tab_custom_script))
-        btn.bind("<Enter>", lambda e: btn.configure(bg="#4c6ef5"))
-        btn.bind("<Leave>", lambda e: btn.configure(bg="#3b5bdb"))
-
-    def _build_custom_script_tab(self, parent):
-        """自定义脚本Tab：可视化步骤脚本构建器"""
-        self.custom_script_steps = []
-
-        # ── 脚本管理栏（最顶部）──────────────────────────────
-        self._build_profile_bar(parent)
-
-        # ── 顶部工具栏（在 PanedWindow 外，固定不被压缩）──────
-        toolbar = ttk.Frame(parent)
-        toolbar.pack(fill=tk.X, pady=(0, 6))
-
-        self._cs_add_btn = ttk.Button(toolbar, text="＋ 添加步骤", width=12,
-                                      command=lambda: self._cs_show_add_menu(self.custom_script_steps, self._cs_add_btn))
-        self._cs_add_btn.pack(side=tk.LEFT, padx=(0, 6))
-
-        ttk.Button(toolbar, text="⟳ 添加循环块", width=13,
-                   command=lambda: self._cs_add_step(
-                       {"type": "loop", "vars": {"count": tk.StringVar(value="3")}, "children": [],
-                        "stop_condition": tk.StringVar(value=""), "show_stop_cond": False},
-                       self.custom_script_steps
-                   )).pack(side=tk.LEFT, padx=(0, 6))
-
-        ttk.Button(toolbar, text="清空", width=6,
-                   command=self._cs_clear).pack(side=tk.RIGHT, padx=(0, 4))
-        ttk.Button(toolbar, text="👁 监控", width=7,
-                   command=self._watch_config_dialog).pack(side=tk.RIGHT, padx=(0, 4))
-        ttk.Button(toolbar, text="🔬 设备调试", width=9,
-                   command=self._cs_open_debug).pack(side=tk.RIGHT, padx=(0, 4))
-
-        # ── PanedWindow：上=步骤列表，下=日志框 ────────────────
-        paned = ttk.PanedWindow(parent, orient=tk.VERTICAL)
-        paned.pack(fill=tk.BOTH, expand=True)
-
-        # 上：可滚动步骤列表
-        list_frame = ttk.Frame(paned)
-        paned.add(list_frame, weight=1)
-
-        _cs_bg = self._C.get("bg", "#f0f2f5")
-        self._cs_canvas = tk.Canvas(list_frame, highlightthickness=0, bg=_cs_bg)
-        vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self._cs_canvas.yview)
-        self._cs_inner = ttk.Frame(self._cs_canvas)
-        self._cs_inner.bind(
-            "<Configure>",
-            lambda e: self._cs_canvas.configure(scrollregion=self._cs_canvas.bbox("all"))
-        )
-        win_id = self._cs_canvas.create_window((0, 0), window=self._cs_inner, anchor="nw")
-        self._cs_canvas.bind("<Configure>", lambda e: self._cs_canvas.itemconfig(win_id, width=e.width))
-        self._cs_canvas.configure(yscrollcommand=vsb.set)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        self._cs_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        def _on_cs_wheel(e):
-            step = -1 if e.delta > 0 else 1
-            self._cs_canvas.yview_scroll(step, "units")
-        self._cs_canvas.bind("<Enter>", lambda e: self._cs_canvas.bind_all("<MouseWheel>", _on_cs_wheel))
-        self._cs_canvas.bind("<Leave>", lambda e: self._cs_canvas.unbind_all("<MouseWheel>"))
-
-        # 下：日志框（和脚本配置一致）
-        self._add_tab_log_pane(paned)
-
-        self._cs_render()
-
-    # ── 监控自动点击 ──────────────────────────────────────────
-
-    def _watch_config_dialog(self):
-        """弹窗配置监控规则，点执行时自动启动"""
-        dlg = tk.Toplevel(self.root)
-        dlg.title("👁 监控自动点击配置")
-        dlg.geometry("460x300")
-        dlg.resizable(True, True)
-        dlg.transient(self.root)
-
-        # 顶部控制栏
-        ctrl = ttk.Frame(dlg, padding=(10, 10, 10, 4))
-        ctrl.pack(fill=tk.X)
-        ttk.Button(ctrl, text="＋ 添加规则", width=10,
-                   command=lambda: _add_rule()).pack(side=tk.LEFT, padx=(0, 12))
-        ttk.Label(ctrl, text="轮询间隔:").pack(side=tk.LEFT)
-        ttk.Entry(ctrl, textvariable=self._watch_interval_var, width=5).pack(side=tk.LEFT, padx=(2, 2))
-        ttk.Label(ctrl, text="秒").pack(side=tk.LEFT)
-
-        # 提示文字
-        ttk.Label(dlg, text="执行脚本时若存在规则将自动开启监控，脚本结束自动停止",
-                  foreground="#6b7280", font=("PingFang SC", 9)).pack(anchor="w", padx=10, pady=(0, 4))
-
-        # 规则列表区
-        rules_outer = ttk.Frame(dlg, padding=(10, 0, 10, 0))
-        rules_outer.pack(fill=tk.BOTH, expand=True)
-        rules_frame = ttk.Frame(rules_outer)
-        rules_frame.pack(fill=tk.BOTH, expand=True)
-
-        def _render():
-            for w in rules_frame.winfo_children():
-                w.destroy()
-            if not self.watch_rules:
-                ttk.Label(rules_frame,
-                          text="暂无规则，点击「＋ 添加规则」开始添加",
-                          foreground="#9ca3af").pack(anchor="w", pady=8)
-                return
-            for i, rule in enumerate(self.watch_rules):
-                row = ttk.Frame(rules_frame)
-                row.pack(fill=tk.X, pady=2)
-                ttk.Label(row, text=f"规则{i+1}:", width=5).pack(side=tk.LEFT, padx=(0, 2))
-                ttk.Label(row, text="遇到文字/ID:", foreground="#6b7280").pack(side=tk.LEFT, padx=(0, 2))
-                ttk.Entry(row, textvariable=rule["keyword"]).pack(
-                    side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
-                ttk.Label(row, text="→ 点击", foreground="#1565c0").pack(side=tk.LEFT, padx=(0, 4))
-                def _del(idx=i):
-                    self.watch_rules.pop(idx)
-                    _render()
-                    self.save_config()
-                ttk.Button(row, text="×", width=2, style="Danger.TButton",
-                           command=_del).pack(side=tk.LEFT)
-
-        def _add_rule():
-            sv = tk.StringVar(value="")
-            sv.trace_add("write", lambda *_: self._cs_schedule_save())
-            self.watch_rules.append({"keyword": sv})
-            _render()
-            self.save_config()
-
-        _render()
-
-        # 底部关闭
-        btn_row = ttk.Frame(dlg, padding=(10, 6, 10, 10))
-        btn_row.pack(fill=tk.X)
-        ttk.Button(btn_row, text="关闭", command=dlg.destroy).pack(side=tk.RIGHT)
-
-    def _watch_start_auto(self, devices):
-        """脚本执行时自动启动监控（不弹提示框）"""
-        rules_plain = [r["keyword"].get().strip() for r in self.watch_rules
-                       if r["keyword"].get().strip()]
-        if not rules_plain:
-            return
-        try:
-            interval = max(0.2, float(self._watch_interval_var.get() or "1.0"))
-        except ValueError:
-            interval = 1.0
-        self._watch_stop_event.clear()
-        self._watch_thread = threading.Thread(
-            target=self._watch_worker,
-            args=(devices, rules_plain, interval),
-            daemon=True
-        )
-        self._watch_thread.start()
-        self.log_message(f"👁 监控已随脚本启动  规则: {rules_plain}  间隔: {interval}s")
-
-    def _watch_stop_if_running(self):
-        """如监控线程在运行则停止"""
-        if self._watch_thread and self._watch_thread.is_alive():
-            self._watch_stop_event.set()
-            self.log_message("👁 监控已随脚本停止")
-
-    def _watch_worker(self, devices, rules, interval):
-        import uiautomator2 as u2
-        conns = {}
-        while not self._watch_stop_event.is_set():
-            for device in devices:
-                serial = device.get("container_name", "").strip()
-                if not serial:
-                    continue
-                try:
-                    if serial not in conns or conns[serial] is None:
-                        conns[serial] = u2.connect(serial)
-                    d = conns[serial]
-                    for kw in rules:
-                        el = d(textContains=kw)
-                        if not el.exists:
-                            el = d(descriptionContains=kw)
-                        if not el.exists:
-                            el = d(resourceIdContains=kw)
-                        if el.exists:
-                            try:
-                                el[0].click()
-                                self.log_message(f"  👁 [{serial}] 命中「{kw}」，已点击")
-                            except Exception:
-                                pass
-                except Exception as ex:
-                    self.log_message(f"  👁 [{serial}] 监控异常: {ex}")
-                    conns[serial] = None  # 下次重连
-            self._watch_stop_event.wait(interval)
-
-    # ── 多脚本管理 ────────────────────────────────────────────
-
-    def _build_profile_bar(self, parent):
-        bar = ttk.LabelFrame(parent, text="脚本管理", padding=(8, 4))
-        bar.pack(fill=tk.X, pady=(0, 6))
-
-        ttk.Label(bar, text="当前脚本:").pack(side=tk.LEFT, padx=(0, 4))
-        self._profile_combo = ttk.Combobox(bar, textvariable=self._profile_name_var,
-                                           state="readonly", width=20)
-        self._profile_combo.pack(side=tk.LEFT, padx=(0, 8))
-        self._profile_combo.bind("<<ComboboxSelected>>", self._on_profile_select)
-
-        ttk.Button(bar, text="新建",   width=5, command=self._profile_new).pack(side=tk.LEFT, padx=2)
-        ttk.Button(bar, text="重命名", width=6, command=self._profile_rename).pack(side=tk.LEFT, padx=2)
-        ttk.Button(bar, text="复制",   width=5, command=self._profile_duplicate).pack(side=tk.LEFT, padx=2)
-        ttk.Button(bar, text="删除",   width=5, style="Danger.TButton",
-                   command=self._profile_delete).pack(side=tk.LEFT, padx=2)
-
-        self._refresh_profile_combo()
-
-    def _refresh_profile_combo(self):
-        names = [p["name"] for p in self.script_profiles]
-        if hasattr(self, "_profile_combo"):
-            self._profile_combo["values"] = names
-        if 0 <= self.active_profile_idx < len(names):
-            self._profile_name_var.set(names[self.active_profile_idx])
-
-    def _profile_save_current(self):
-        """把当前 UI 状态写回 active profile（不触发 save_config）"""
-        if not (0 <= self.active_profile_idx < len(self.script_profiles)):
-            return
-        p = self.script_profiles[self.active_profile_idx]
-        if hasattr(self, "custom_script_steps"):
-            p["steps"] = self._cs_steps_to_plain(self.custom_script_steps)
-        if hasattr(self, "watch_rules"):
-            p["watch_rules"] = [r["keyword"].get() for r in self.watch_rules]
-        if hasattr(self, "_watch_interval_var"):
-            p["watch_interval"] = self._watch_interval_var.get()
-
-    def _profile_load(self, idx):
-        """从 profile 恢复到 UI"""
-        if not (0 <= idx < len(self.script_profiles)):
-            return
-        self.active_profile_idx = idx
-        p = self.script_profiles[idx]
-
-        # 步骤
-        self.custom_script_steps = self._cs_steps_from_plain(p.get("steps", []))
-        if hasattr(self, "_cs_inner"):
-            self._cs_render()
-
-        # 监控规则
-        self.watch_rules = []
-        for kw in p.get("watch_rules", []):
-            sv = tk.StringVar(value=kw)
-            sv.trace_add("write", lambda *_: self._cs_schedule_save())
-            self.watch_rules.append({"keyword": sv})
-        self._watch_interval_var.set(p.get("watch_interval", "1.0"))
-
-        self._refresh_profile_combo()
-
-    def _on_profile_select(self, event=None):
-        selected = self._profile_name_var.get()
-        names = [p["name"] for p in self.script_profiles]
-        if selected in names:
-            new_idx = names.index(selected)
-            if new_idx != self.active_profile_idx:
-                self._profile_save_current()
-                self._profile_load(new_idx)
-                self.save_config()
-
-    def _profile_new(self):
-        name = self._profile_input_dialog("新建脚本", "请输入脚本名称:", "新脚本")
-        if not name:
-            return
-        if name in [p["name"] for p in self.script_profiles]:
-            messagebox.showwarning("提示", f'"{name}" 已存在')
-            return
-        self._profile_save_current()
-        self.script_profiles.append({"name": name, "steps": [], "watch_rules": [], "watch_interval": "1.0"})
-        self._profile_load(len(self.script_profiles) - 1)
-        self.save_config()
-
-    def _profile_rename(self):
-        if not self.script_profiles:
-            return
-        current = self.script_profiles[self.active_profile_idx]["name"]
-        name = self._profile_input_dialog("重命名脚本", "请输入新名称:", current)
-        if not name or name == current:
-            return
-        if name in [p["name"] for p in self.script_profiles]:
-            messagebox.showwarning("提示", f'"{name}" 已存在')
-            return
-        self.script_profiles[self.active_profile_idx]["name"] = name
-        self._refresh_profile_combo()
-        self.save_config()
-
-    def _profile_duplicate(self):
-        if not self.script_profiles:
-            return
-        self._profile_save_current()
-        import copy
-        src = self.script_profiles[self.active_profile_idx]
-        base = src["name"]
-        names = [p["name"] for p in self.script_profiles]
-        new_name, counter = base + "_副本", 1
-        while new_name in names:
-            new_name = f"{base}_副本{counter}"
-            counter += 1
-        new_p = copy.deepcopy(src)
-        new_p["name"] = new_name
-        self.script_profiles.append(new_p)
-        self._profile_load(len(self.script_profiles) - 1)
-        self.save_config()
-
-    def _profile_delete(self):
-        if len(self.script_profiles) <= 1:
-            messagebox.showwarning("提示", "至少保留一份脚本，无法删除")
-            return
-        name = self.script_profiles[self.active_profile_idx]["name"]
-        if not messagebox.askyesno("确认删除", f'确认删除脚本「{name}」？此操作不可恢复。'):
-            return
-        self.script_profiles.pop(self.active_profile_idx)
-        new_idx = min(self.active_profile_idx, len(self.script_profiles) - 1)
-        self._profile_load(new_idx)
-        self.save_config()
-
-    def _profile_input_dialog(self, title, prompt, default=""):
-        """通用单行输入对话框，返回用户输入字符串或 None"""
-        dlg = tk.Toplevel(self.root)
-        dlg.title(title)
-        dlg.geometry("320x120")
-        dlg.resizable(False, False)
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        ttk.Label(dlg, text=prompt).pack(padx=16, pady=(16, 4), anchor="w")
-        var = tk.StringVar(value=default)
-        entry = ttk.Entry(dlg, textvariable=var, width=36)
-        entry.pack(padx=16, pady=4)
-        entry.select_range(0, tk.END)
-        entry.focus_set()
-
-        result = [None]
-        def on_ok():
-            result[0] = var.get().strip()
-            dlg.destroy()
-        def on_cancel():
-            dlg.destroy()
-
-        btn_row = ttk.Frame(dlg)
-        btn_row.pack(pady=8)
-        ttk.Button(btn_row, text="确定", command=on_ok).pack(side=tk.LEFT, padx=6)
-        ttk.Button(btn_row, text="取消", command=on_cancel).pack(side=tk.LEFT, padx=6)
-        entry.bind("<Return>", lambda e: on_ok())
-        entry.bind("<Escape>", lambda e: on_cancel())
-        dlg.wait_window()
-        return result[0]
-
-    # ── 步骤数据操作 ──────────────────────────────────────────
-
-    def _cs_add_step(self, step, target):
-        target.append(step)
-        self._cs_render()
-        self.save_config()
-
-    def _cs_remove_step(self, lst, idx):
-        lst.pop(idx)
-        self._cs_render()
-        self.save_config()
-
-    def _cs_move_step(self, lst, idx, direction):
-        new_idx = idx + direction
-        if 0 <= new_idx < len(lst):
-            lst[idx], lst[new_idx] = lst[new_idx], lst[idx]
-            self._cs_render()
-            self.save_config()
-
-    def _cs_clear(self):
-        self.custom_script_steps.clear()
-        self._cs_render()
-        self.save_config()
-
-    def _cs_open_debug(self):
-        """自定义脚本工具栏：对选中设备打开设备调试窗口"""
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要调试的设备")
-            return
-        for device in devices:
-            serial = device.get("container_name", "").strip()
-            if serial:
-                self._open_device_preview(serial)
-
-    def _cs_show_add_menu(self, target, anchor_widget):
-        menu = tk.Menu(anchor_widget.winfo_toplevel(), tearoff=0)
-        types = [
-            ("open_app",   "📱  打开App",     {"app": tk.StringVar(value=""), "stop": tk.StringVar(value="False")}),
-            ("tap_coord",  "👆  点击坐标",    {"x": tk.StringVar(value=""), "y": tk.StringVar(value="")}),
-            ("tap_text",   "🔍  点击文案",    {"keyword": tk.StringVar(value="")}),
-            ("input_text", "⌨️  输入文字",    {"content": tk.StringVar(value="")}),
-            ("swipe",      "👋  页面滑动",    {"direction": tk.StringVar(value="向上"), "distance": tk.StringVar(value="500"), "count": tk.StringVar(value="1")}),
-            ("wait",       "⏳  等待",        {"seconds": tk.StringVar(value="1")}),
-            ("key_back",   "◀  按返回键",    {"count": tk.StringVar(value="1")}),
-            ("key_home",   "🏠  按Home键",   {}),
-            ("key_menu",   "☰  按菜单键",    {}),
-        ]
-        for stype, label, default_vars in types:
-            menu.add_command(
-                label=label,
-                command=lambda t=stype, v=default_vars: self._cs_add_step(
-                    {"type": t, "vars": v, "stop_condition": tk.StringVar(value=""), "show_stop_cond": False}, target)
-            )
-        menu.post(anchor_widget.winfo_rootx(), anchor_widget.winfo_rooty() + anchor_widget.winfo_height())
-
-    # ── 渲染 ──────────────────────────────────────────────────
-
-    def _cs_render(self):
-        for w in self._cs_inner.winfo_children():
-            w.destroy()
-        if not self.custom_script_steps:
-            ttk.Label(self._cs_inner, text="点击「添加步骤」或「添加循环块」开始构建",
-                      foreground="#9ca3af", font=("PingFang SC", 11)).pack(pady=50)
-            return
-        self._cs_render_list(self._cs_inner, self.custom_script_steps, indent=False)
-
-    def _cs_render_list(self, container, steps, indent):
-        for i, step in enumerate(steps):
-            if step["type"] == "loop":
-                self._cs_render_loop(container, step, i, steps, indent)
-            else:
-                self._cs_render_row(container, step, i, steps, indent)
-
-    def _cs_render_row(self, container, step, idx, lst, indent):
-        TYPE_INFO = {
-            "open_app":   ("📱", "打开App"),
-            "tap_coord":  ("👆", "点击坐标"),
-            "tap_text":   ("🔍", "点击文案"),
-            "input_text": ("⌨", "输入文字"),
-            "swipe":      ("👋", "页面滑动"),
-            "wait":       ("⏳", "等待"),
-            "key_back":   ("◀", "按返回键"),
-            "key_home":   ("🏠", "按Home键"),
-            "key_menu":   ("☰", "按菜单键"),
-        }
-        icon, label = TYPE_INFO.get(step["type"], ("·", step["type"]))
-
-        row = ttk.Frame(container)
-        row.pack(fill=tk.X, pady=2, padx=(28 if indent else 6, 6))
-
-        # 左侧：类型标签
-        ttk.Label(row, text=f"{icon} {label}", width=11,
-                  font=("PingFang SC", 10, "bold")).pack(side=tk.LEFT, padx=(0, 6))
-
-        # 右侧按钮先占位，剩余空间才给参数框
-        ttk.Button(row, text="↑", width=1, command=lambda: self._cs_move_step(lst, idx, -1)).pack(side=tk.RIGHT, padx=1)
-        ttk.Button(row, text="↓", width=1, command=lambda: self._cs_move_step(lst, idx, 1)).pack(side=tk.RIGHT, padx=1)
-        ttk.Button(row, text="×", width=1, command=lambda: self._cs_remove_step(lst, idx)).pack(side=tk.RIGHT, padx=1)
-        ttk.Button(row, text="测试", width=4,
-                   command=lambda s=step: self._cs_test_step(s)).pack(side=tk.RIGHT, padx=(1, 2))
-
-        # 终止条件切换按钮（swipe / key_back / wait 支持）
-        supports_stop_cond = step["type"] in ("swipe", "key_back", "wait")
-        if supports_stop_cond:
-            sc_var = step.get("stop_condition")
-            if sc_var is None:
-                sc_var = tk.StringVar(value="")
-                step["stop_condition"] = sc_var
-            has_cond = bool(sc_var.get().strip())
-            show_cond = step.get("show_stop_cond", False)
-            cond_style = "Warning.TButton" if has_cond else "Muted.TButton"
-            cond_btn_text = "🛑✓" if show_cond else "🛑"
-            def _toggle_cond(s=step):
-                s["show_stop_cond"] = not s.get("show_stop_cond", False)
-                self._cs_render()
-            ttk.Button(row, text=cond_btn_text, width=3, style=cond_style,
-                       command=_toggle_cond).pack(side=tk.RIGHT, padx=(1, 4))
-        else:
-            show_cond = False
-
-        # 参数框填充剩余空间
-        params = ttk.Frame(row)
-        params.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self._cs_render_params(params, step)
-
-        # 终止条件子行（层级缩进，比步骤行稍靠右）
-        if supports_stop_cond and show_cond:
-            cond_row = tk.Frame(container, bg="#fff7ed", bd=1, relief="groove")
-            cond_row.pack(fill=tk.X, pady=(0, 2), padx=(52 if indent else 30, 6))
-            tk.Label(cond_row, text="└ 终止条件", bg="#fff7ed", fg="#ea580c",
-                     font=("PingFang SC", 9, "bold")).pack(side=tk.LEFT, padx=(8, 4), pady=4)
-            tk.Label(cond_row, text="文字/ID:", bg="#fff7ed", fg="#92400e",
-                     font=("PingFang SC", 9)).pack(side=tk.LEFT, padx=(0, 2))
-            ttk.Entry(cond_row, textvariable=sc_var).pack(
-                side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4), pady=3)
-            sc_var.trace_add("write", lambda *_: self._cs_schedule_save())
-            def _clear_cond(s=step):
-                s["stop_condition"].set("")
-                s["show_stop_cond"] = False
-                self._cs_render()
-            x_lbl = tk.Label(cond_row, text="×", bg="#fff7ed", fg="#dc2626",
-                             cursor="hand2", font=("PingFang SC", 12, "bold"))
-            x_lbl.pack(side=tk.RIGHT, padx=(0, 6))
-            x_lbl.bind("<Button-1>", lambda e: _clear_cond())
-
-        ttk.Separator(container, orient="horizontal").pack(fill=tk.X, padx=(28 if indent else 6, 6), pady=1)
-
-    def _cs_render_params(self, container, step):
-        t = step["type"]
-        v = step["vars"]
-        if t == "open_app":
-            apps = list(self._PRESET_APPS.keys()) + [a["name"] for a in self.custom_open_apps]
-            cb = ttk.Combobox(container, textvariable=v["app"], values=apps, width=18, state="readonly")
-            cb.pack(side=tk.LEFT, padx=2)
-            # 「＋」按钮：弹窗添加应用名 + 包名，添加后刷新下拉框
-            def _add_app_and_refresh(cb_ref=cb, var_ref=v):
-                def on_success(name, pkg):
-                    new_apps = list(self._PRESET_APPS.keys()) + [a["name"] for a in self.custom_open_apps]
-                    cb_ref["values"] = new_apps
-                    cb_ref.set(name)
-                    var_ref["app"].set(name)
-                    # 同步更新脚本配置 Tab 的下拉框
-                    if hasattr(self, "open_app_combo"):
-                        self._open_app_combo_values = new_apps
-                        self.open_app_combo["values"] = new_apps
-                self._show_add_app_dialog(on_success=on_success)
-            ttk.Button(container, text="＋", width=2,
-                       command=_add_app_and_refresh).pack(side=tk.LEFT, padx=(2, 6))
-            # 是否杀进程（stop=True/False）
-            if "stop" not in v:
-                v["stop"] = tk.StringVar(value="False")
-            _stop_bool = tk.BooleanVar(value=v["stop"].get() == "True")
-            def _on_stop_toggle(bv=_stop_bool, sv=v["stop"]):
-                sv.set("True" if bv.get() else "False")
-                self._cs_schedule_save()
-            ttk.Checkbutton(container, text="杀进程(stop)", variable=_stop_bool,
-                            command=_on_stop_toggle).pack(side=tk.LEFT, padx=(0, 0))
-        elif t == "tap_coord":
-            ttk.Label(container, text="X:").pack(side=tk.LEFT)
-            ttk.Entry(container, textvariable=v["x"], width=6).pack(side=tk.LEFT, padx=(2, 8))
-            ttk.Label(container, text="Y:").pack(side=tk.LEFT)
-            ttk.Entry(container, textvariable=v["y"], width=6).pack(side=tk.LEFT, padx=2)
-        elif t == "tap_text":
-            ttk.Label(container, text="关键词:").pack(side=tk.LEFT)
-            ttk.Entry(container, textvariable=v["keyword"], width=22).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-        elif t == "input_text":
-            ttk.Label(container, text="内容:").pack(side=tk.LEFT)
-            ttk.Entry(container, textvariable=v["content"], width=22).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-        elif t == "swipe":
-            if "count" not in v:
-                v["count"] = tk.StringVar(value="1")
-            ttk.Label(container, text="方向:").pack(side=tk.LEFT)
-            ttk.Combobox(container, textvariable=v["direction"],
-                         values=["向上", "向下", "向左", "向右"], width=5, state="readonly").pack(side=tk.LEFT, padx=(2, 6))
-            ttk.Label(container, text="距离:").pack(side=tk.LEFT)
-            ttk.Entry(container, textvariable=v["distance"], width=5).pack(side=tk.LEFT, padx=(2, 6))
-            ttk.Label(container, text="次数:").pack(side=tk.LEFT)
-            ttk.Entry(container, textvariable=v["count"], width=3).pack(side=tk.LEFT, padx=2)
-        elif t == "wait":
-            ttk.Label(container, text="时长:").pack(side=tk.LEFT)
-            ttk.Entry(container, textvariable=v["seconds"], width=6).pack(side=tk.LEFT, padx=2)
-            ttk.Label(container, text="秒").pack(side=tk.LEFT)
-        elif t == "key_back":
-            if "count" not in v:
-                v["count"] = tk.StringVar(value="1")
-            ttk.Label(container, text="次数:").pack(side=tk.LEFT)
-            ttk.Entry(container, textvariable=v["count"], width=4).pack(side=tk.LEFT, padx=2)
-            ttk.Label(container, text="次（每次间隔3s）", foreground="#6b7280").pack(side=tk.LEFT, padx=(2, 0))
-        elif t in ("key_home", "key_menu"):
-            labels = {"key_home": "按下 Home 键", "key_menu": "按下菜单键"}
-            ttk.Label(container, text=labels[t], foreground="#6b7280").pack(side=tk.LEFT)
-
-        # 给所有输入变量加防抖自动保存 trace
-        for sv in step.get("vars", {}).values():
-            if isinstance(sv, tk.StringVar):
-                sv.trace_add("write", lambda *_: self._cs_schedule_save())
-
-    def _cs_schedule_save(self):
-        if hasattr(self, "_cs_save_after_id"):
-            self.root.after_cancel(self._cs_save_after_id)
-        self._cs_save_after_id = self.root.after(800, self.save_config)
-
-    def _cs_render_loop(self, container, step, idx, lst, indent):
-        outer = tk.Frame(container, bg="#dbeafe", bd=1, relief="solid")
-        outer.pack(fill=tk.X, pady=5, padx=(12 if indent else 4, 4))
-
-        # 循环头
-        header = tk.Frame(outer, bg="#bfdbfe")
-        header.pack(fill=tk.X)
-        tk.Label(header, text="🔄 循环", bg="#bfdbfe", fg="#1e40af",
-                 font=("PingFang SC", 10, "bold")).pack(side=tk.LEFT, padx=(8, 4), pady=5)
-        tk.Entry(header, textvariable=step["vars"]["count"], width=4,
-                 font=("PingFang SC", 10)).pack(side=tk.LEFT, padx=2)
-        tk.Label(header, text="次", bg="#bfdbfe", fg="#1e40af").pack(side=tk.LEFT, padx=(0, 10))
-        step["vars"]["count"].trace_add("write", lambda *_: self._cs_schedule_save())
-
-        # 添加步骤按钮（在循环内）
-        add_inner_btn = tk.Label(header, text="＋ 添加步骤", bg="#93c5fd", fg="#1e40af",
-                                 cursor="hand2", padx=6, pady=3,
-                                 font=("PingFang SC", 9))
-        add_inner_btn.pack(side=tk.LEFT, padx=4)
-        add_inner_btn.bind("<Button-1>",
-                           lambda e, s=step, b=add_inner_btn: self._cs_show_add_menu(s["children"], b))
-        add_inner_btn.bind("<Enter>", lambda e: add_inner_btn.configure(bg="#60a5fa"))
-        add_inner_btn.bind("<Leave>", lambda e: add_inner_btn.configure(bg="#93c5fd"))
-
-        # 删除循环
-        del_btn = tk.Label(header, text="× 删除", bg="#fecaca", fg="#dc2626",
-                           cursor="hand2", padx=6, pady=3,
-                           font=("PingFang SC", 9))
-        del_btn.pack(side=tk.RIGHT, padx=(4, 8))
-        del_btn.bind("<Button-1>", lambda e: self._cs_remove_step(lst, idx))
-        del_btn.bind("<Enter>", lambda e: del_btn.configure(bg="#fca5a5"))
-        del_btn.bind("<Leave>", lambda e: del_btn.configure(bg="#fecaca"))
-
-        # 上下移动
-        up_lbl = tk.Label(header, text="↑", bg="#bfdbfe", fg="#1e40af", cursor="hand2",
-                          font=("PingFang SC", 10))
-        up_lbl.pack(side=tk.RIGHT, padx=2)
-        up_lbl.bind("<Button-1>", lambda e: self._cs_move_step(lst, idx, -1))
-
-        dn_lbl = tk.Label(header, text="↓", bg="#bfdbfe", fg="#1e40af", cursor="hand2",
-                          font=("PingFang SC", 10))
-        dn_lbl.pack(side=tk.RIGHT, padx=2)
-        dn_lbl.bind("<Button-1>", lambda e: self._cs_move_step(lst, idx, 1))
-
-        # 循环体
-        body = tk.Frame(outer, bg="#eff6ff")
-        body.pack(fill=tk.X, padx=0, pady=(0, 2))
-
-        if step["children"]:
-            self._cs_render_list(body, step["children"], indent=True)
-        else:
-            tk.Label(body, text="（循环内暂无步骤，点击「＋ 添加步骤」）",
-                     bg="#dbeafe", fg="#6b9fd4",
-                     font=("PingFang SC", 9)).pack(pady=8)
-
-    # ── 执行逻辑 ──────────────────────────────────────────────
-
-    def _cs_test_step(self, step):
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-        plain = self._cs_steps_to_plain([step])
-        threading.Thread(target=self._cs_run_worker, args=(devices, plain), daemon=True).start()
-
-    def _cs_run(self):
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-        if not self.custom_script_steps:
-            messagebox.showwarning("提示", "请先添加步骤")
-            return
-        self._cs_stop_event.clear()
-        self._cs_pause_event.clear()
-        steps_snapshot = self._cs_steps_to_plain(self.custom_script_steps)
-        threading.Thread(target=self._cs_run_worker, args=(devices, steps_snapshot), daemon=True).start()
-        self._watch_start_auto(devices)
-
-    def _cs_steps_to_plain(self, steps):
-        result = []
-        for step in steps:
-            d = {"type": step["type"], "vars": {k: sv.get() for k, sv in step.get("vars", {}).items()}}
-            if step["type"] == "loop":
-                d["children"] = self._cs_steps_to_plain(step["children"])
-            sc = step.get("stop_condition")
-            d["stop_condition"] = sc.get() if hasattr(sc, "get") else (sc or "")
-            d["show_stop_cond"] = step.get("show_stop_cond", False)
-            result.append(d)
-        return result
-
-    def _cs_steps_from_plain(self, data):
-        steps = []
-        for d in data:
-            step = {"type": d["type"], "vars": {k: tk.StringVar(value=str(v)) for k, v in d.get("vars", {}).items()}}
-            if d["type"] == "loop":
-                step["children"] = self._cs_steps_from_plain(d.get("children", []))
-            step["stop_condition"] = tk.StringVar(value=d.get("stop_condition", ""))
-            step["show_stop_cond"] = d.get("show_stop_cond", False)
-            steps.append(step)
-        return steps
-
-    def _cs_run_worker(self, devices, steps):
-        try:
-            for device in devices:
-                if self._cs_stop_event.is_set():
-                    break
-                serial = device.get("container_name", "").strip()
-                self.log_message(f"▶ [{serial}] 开始执行自定义脚本")
-                try:
-                    self._cs_exec_steps(serial, steps)
-                    self.log_message(f"✓ [{serial}] 自定义脚本执行完成")
-                except InterruptedError:
-                    self.log_message(f"⏹ [{serial}] 自定义脚本已停止")
-                    break
-                except Exception as ex:
-                    self.log_message(f"✗ [{serial}] 执行异常: {ex}")
-        finally:
-            self.root.after(0, self._watch_stop_if_running)
-
-    def _cs_exec_steps(self, serial, steps):
-        import uiautomator2 as u2
-        _d_ref = [None]
-
-        def get_d():
-            if _d_ref[0] is None:
-                _d_ref[0] = u2.connect(serial)
-            return _d_ref[0]
-
-        def check_stop_cond(step):
-            cond = step.get("stop_condition", "")
-            if not cond or not cond.strip():
-                return False
-            try:
-                d = get_d()
-                if d(textContains=cond).exists:
-                    return True
-                if d(descriptionContains=cond).exists:
-                    return True
-                if d(resourceIdContains=cond).exists:
-                    return True
-            except Exception:
-                pass
-            return False
-
-        for step in steps:
-            # 停止检查
-            if self._cs_stop_event.is_set():
-                raise InterruptedError("用户停止")
-            # 暂停等待
-            while self._cs_pause_event.is_set():
-                if self._cs_stop_event.is_set():
-                    raise InterruptedError("用户停止")
-                time.sleep(0.2)
-
-            t = step["type"]
-            v = step.get("vars", {})
-            if t == "open_app":
-                app_name = v.get("app", "")
-                pkg = self._PRESET_APPS.get(app_name) or next(
-                    (a["package"] for a in self.custom_open_apps if a["name"] == app_name), None)
-                stop = v.get("stop", "False") == "True"
-                if pkg:
-                    try:
-                        d = get_d()
-                        if stop:
-                            d.app_stop(pkg)
-                            self.log_message(f"  📱 [{serial}] 已杀进程 {app_name}  (stop=True)")
-                            d.shell(f"monkey -p {pkg} -c android.intent.category.LAUNCHER 1")
-                            self.log_message(f"  📱 [{serial}] 打开 {app_name}")
-                        else:
-                            d.shell(f"monkey -p {pkg} -c android.intent.category.LAUNCHER 1")
-                            self.log_message(f"  📱 [{serial}] 打开 {app_name}")
-                    except Exception as ex:
-                        self.log_message(f"  📱 [{serial}] 操作失败: {ex}")
-                else:
-                    self.log_message(f"  📱 [{serial}] 未找到应用「{app_name}」的包名，请在列表中先添加")
-            elif t == "tap_coord":
-                subprocess.run(["adb", "-s", serial, "shell", "input", "tap",
-                                 str(v.get("x", "0")), str(v.get("y", "0"))],
-                                capture_output=True, timeout=10)
-                self.log_message(f"  👆 [{serial}] 点击 ({v.get('x')}, {v.get('y')})")
-            elif t == "tap_text":
-                kw = v.get("keyword", "")
-                try:
-                    d = get_d()
-                    el = d(textContains=kw)
-                    if not el.exists:
-                        el = d(descriptionContains=kw)
-                    if el.exists:
-                        el[0].click()
-                        self.log_message(f"  🔍 [{serial}] 点击文案「{kw}」成功")
-                    else:
-                        self.log_message(f"  🔍 [{serial}] 未找到文案「{kw}」")
-                except Exception as ex:
-                    self.log_message(f"  🔍 [{serial}] 点击文案异常: {ex}")
-            elif t == "input_text":
-                content = v.get("content", "")
-                try:
-                    d = get_d()
-                    edit = d(className="android.widget.EditText")
-                    if edit.exists:
-                        edit.set_text(content)
-                        self.log_message(f"  ⌨ [{serial}] 输入「{content}」")
-                    else:
-                        self.log_message(f"  ⌨ [{serial}] 未找到输入框")
-                except Exception as ex:
-                    self.log_message(f"  ⌨ [{serial}] 输入异常: {ex}")
-            elif t == "swipe":
-                direction = v.get("direction", "向上")
-                dist = int(v.get("distance", "500"))
-                repeat = max(1, int(v.get("count", "1")))
-                swipe_map = {
-                    "向上":  (540, 1200, 540, 1200 - dist),
-                    "向下":  (540, 400, 540, 400 + dist),
-                    "向左":  (800, 960, 800 - dist, 960),
-                    "向右":  (200, 960, 200 + dist, 960),
-                }
-                x1, y1, x2, y2 = swipe_map.get(direction, (540, 1200, 540, 400))
-                for i in range(repeat):
-                    if self._cs_stop_event.is_set():
-                        raise InterruptedError("用户停止")
-                    try:
-                        # 用 u2 HTTP API 代替 adb shell，彻底避免 ADB 管道挂死问题
-                        get_d().swipe(x1, y1, x2, y2, duration=0.3)
-                    except Exception as ex:
-                        self.log_message(f"  ⚠ [{serial}] 滑动失败: {ex}，跳过本次（第{i+1}/{repeat}次）")
-                        _d_ref[0] = None  # 重置连接，下次重新建立
-                        continue
-                    self.log_message(f"  👋 [{serial}] 页面{direction} {dist}px（第{i+1}/{repeat}次）")
-                    # 每次滑动后查一次终止条件
-                    if check_stop_cond(step):
-                        cond = step.get("stop_condition", "")
-                        self.log_message(f"  🛑 [{serial}] 检测到「{cond}」，停止滑动")
-                        break
-                    if i < repeat - 1:
-                        time.sleep(random.uniform(1, 3))
-            elif t == "key_back":
-                repeat = max(1, int(v.get("count", "1")))
-                for i in range(repeat):
-                    if self._cs_stop_event.is_set():
-                        raise InterruptedError("用户停止")
-                    try:
-                        # 用 u2 HTTP API 代替 adb shell，彻底避免 ADB 管道挂死问题
-                        get_d().press("back")
-                    except Exception as ex:
-                        self.log_message(f"  ⚠ [{serial}] 按返回键失败: {ex}，跳过本次（第{i+1}/{repeat}次）")
-                        _d_ref[0] = None  # 重置连接，下次重新建立
-                        continue
-                    self.log_message(f"  ◀ [{serial}] 按返回键（第{i+1}/{repeat}次）")
-                    # 每次按键后查一次终止条件
-                    if check_stop_cond(step):
-                        cond = step.get("stop_condition", "")
-                        self.log_message(f"  🛑 [{serial}] 检测到「{cond}」，停止按返回键")
-                        break
-                    if i < repeat - 1:
-                        time.sleep(3)
-            elif t == "key_home":
-                subprocess.run(["adb", "-s", serial, "shell", "input", "keyevent", "3"],
-                                capture_output=True, timeout=10)
-                self.log_message(f"  🏠 [{serial}] 按Home键")
-            elif t == "key_menu":
-                subprocess.run(["adb", "-s", serial, "shell", "input", "keyevent", "82"],
-                                capture_output=True, timeout=10)
-                self.log_message(f"  ☰ [{serial}] 按菜单键")
-            elif t == "wait":
-                secs = float(v.get("seconds", "1"))
-                self.log_message(f"  ⏳ [{serial}] 等待 {secs}s")
-                elapsed = 0.0
-                while elapsed < secs:
-                    if self._cs_stop_event.is_set():
-                        raise InterruptedError("用户停止")
-                    sleep_time = min(0.5, secs - elapsed)
-                    time.sleep(sleep_time)
-                    elapsed += sleep_time
-                    if check_stop_cond(step):
-                        cond = step.get("stop_condition", "")
-                        self.log_message(f"  🛑 [{serial}] 等待中检测到「{cond}」，提前结束等待")
-                        break
-            elif t == "loop":
-                count = int(v.get("count", "1"))
-                self.log_message(f"  🔄 [{serial}] 循环开始 × {count}")
-                for i in range(count):
-                    if self._cs_stop_event.is_set():
-                        raise InterruptedError("用户停止")
-                    self.log_message(f"  🔄 [{serial}] 第 {i+1}/{count} 次")
-                    self._cs_exec_steps(serial, step.get("children", []))
-                self.log_message(f"  🔄 [{serial}] 循环结束")
-
-    def _setup_open_app_bar(self, parent):
-        """脚本配置Tab：打开App功能栏"""
-        bar = ttk.LabelFrame(parent, text="打开 App", padding=(8, 8))
-        bar.pack(fill=tk.X, pady=(0, 6), padx=2)
-
-        # 右侧：打开按钮（先pack保证靠右）
-        open_btn = ttk.Button(bar, text="▶  打开", width=10,
-                              command=self._open_app_action)
-        open_btn.pack(side=tk.RIGHT, padx=(10, 0))
-
-        # 右侧：间隔
-        ttk.Label(bar, text="秒").pack(side=tk.RIGHT, padx=(2, 10))
-        self.open_app_delay_var = tk.StringVar(value="3")
-        ttk.Entry(bar, textvariable=self.open_app_delay_var, width=6).pack(side=tk.RIGHT)
-        ttk.Label(bar, text="间隔:").pack(side=tk.RIGHT, padx=(10, 2))
-
-        # 左侧：应用选择 + 自定义按钮（Combobox 填充剩余空间）
-        ttk.Label(bar, text="应用:").pack(side=tk.LEFT, padx=(0, 4))
-        self._open_app_combo_values = list(self._PRESET_APPS.keys()) + \
-            [a["name"] for a in self.custom_open_apps]
-        self.open_app_var = tk.StringVar(
-            value=self._open_app_combo_values[0] if self._open_app_combo_values else "")
-        self.open_app_combo = ttk.Combobox(
-            bar, textvariable=self.open_app_var,
-            values=self._open_app_combo_values,
-            state="normal")
-        self.open_app_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
-        ttk.Button(bar, text="＋", width=3,
-                   command=self._add_custom_open_app).pack(side=tk.LEFT)
-
-    def _setup_coord_tap_bar(self, parent):
-        """脚本配置Tab：坐标点击功能栏"""
-        bar = ttk.LabelFrame(parent, text="坐标点击", padding=(8, 8))
-        bar.pack(fill=tk.X, pady=(0, 6), padx=2)
-
-        # 右侧：点击按钮（先pack保证靠右）
-        ttk.Button(bar, text="▶  点击", width=10,
-                   command=self._coord_tap_action).pack(side=tk.RIGHT, padx=(10, 0))
-
-        # 右侧：间隔
-        ttk.Label(bar, text="ms").pack(side=tk.RIGHT, padx=(2, 10))
-        self.coord_tap_delay_var = tk.StringVar(value="500")
-        ttk.Entry(bar, textvariable=self.coord_tap_delay_var, width=6).pack(side=tk.RIGHT)
-        ttk.Label(bar, text="间隔:").pack(side=tk.RIGHT, padx=(10, 2))
-
-        # 左侧：X / Y 输入框（grid 均分列宽，保证等宽）
-        self.coord_tap_x_var = tk.StringVar(value="")
-        self.coord_tap_y_var = tk.StringVar(value="")
-        xy_frame = ttk.Frame(bar)
-        xy_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        xy_frame.columnconfigure(1, weight=1)
-        xy_frame.columnconfigure(3, weight=1)
-        ttk.Label(xy_frame, text="X:").grid(row=0, column=0, padx=(0, 2))
-        ttk.Entry(xy_frame, textvariable=self.coord_tap_x_var).grid(
-            row=0, column=1, sticky="ew", padx=(0, 10))
-        ttk.Label(xy_frame, text="Y:").grid(row=0, column=2, padx=(0, 2))
-        ttk.Entry(xy_frame, textvariable=self.coord_tap_y_var).grid(
-            row=0, column=3, sticky="ew")
-
-    def _coord_tap_action(self):
-        """点击坐标点击按钮：通过 ADB 在所选设备上点击指定坐标"""
-        try:
-            x = int(self.coord_tap_x_var.get().strip())
-            y = int(self.coord_tap_y_var.get().strip())
-        except ValueError:
-            messagebox.showwarning("提示", "请输入有效的 X / Y 整数坐标")
-            return
-
-        try:
-            delay_ms = float(self.coord_tap_delay_var.get() or "500")
-        except ValueError:
-            delay_ms = 500.0
-
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-
-        self.log_message(f"▶ 坐标点击 ({x}, {y})，共 {len(devices)} 台设备，间隔 {delay_ms:.0f}ms")
-
-        def run():
-            for idx, device in enumerate(devices):
-                if idx > 0 and delay_ms > 0:
-                    time.sleep(delay_ms / 1000.0)
-                serial = device.get("container_name", "").strip()
-                try:
-                    result = subprocess.run(
-                        ["adb", "-s", serial, "shell", "input", "tap", str(x), str(y)],
-                        capture_output=True, text=True, timeout=10
-                    )
-                    if result.returncode == 0:
-                        self.log_message(f"✓ [{serial}] 点击 ({x}, {y}) 成功")
-                    else:
-                        self.log_message(f"✗ [{serial}] 点击失败: {result.stderr.strip()}")
-                except Exception as e:
-                    self.log_message(f"✗ [{serial}] 点击异常: {e}")
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def _setup_input_text_bar(self, parent):
-        """脚本配置Tab：输入文字功能栏"""
-        bar = ttk.LabelFrame(parent, text="输入文字", padding=(8, 8))
-        bar.pack(fill=tk.X, pady=(0, 6), padx=2)
-
-        # 右侧：输入文字按钮（先pack保证靠右）
-        ttk.Button(bar, text="▶  输入文字", width=12,
-                   command=self._input_text_action).pack(side=tk.RIGHT, padx=(10, 0))
-
-        # 右侧：间隔
-        ttk.Label(bar, text="ms").pack(side=tk.RIGHT, padx=(2, 10))
-        self.input_text_delay_var = tk.StringVar(value="500")
-        ttk.Entry(bar, textvariable=self.input_text_delay_var, width=6).pack(side=tk.RIGHT)
-        ttk.Label(bar, text="间隔:").pack(side=tk.RIGHT, padx=(10, 2))
-
-        # 左侧：内容输入框（填充剩余空间）
-        ttk.Label(bar, text="内容:").pack(side=tk.LEFT, padx=(0, 4))
-        self.input_text_var = tk.StringVar(value="")
-        ttk.Entry(bar, textvariable=self.input_text_var).pack(
-            side=tk.LEFT, fill=tk.X, expand=True)
-
-    def _input_text_action(self):
-        """输入文字按钮：用 uiautomator2 找到第一个 EditText 并 set_text"""
-        text = self.input_text_var.get()
-        if not text:
-            messagebox.showwarning("提示", "请输入要输入的文字内容")
-            return
-
-        try:
-            delay_ms = float(self.input_text_delay_var.get() or "500")
-        except ValueError:
-            delay_ms = 500.0
-
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-
-        self.log_message(f"▶ 输入文字，共 {len(devices)} 台设备，间隔 {delay_ms:.0f}ms")
-
-        def run():
-            try:
-                import uiautomator2 as u2
-            except ImportError:
-                self.log_message("✗ 未安装 uiautomator2，请先执行: pip install uiautomator2")
-                return
-
-            for idx, device in enumerate(devices):
-                if idx > 0 and delay_ms > 0:
-                    time.sleep(delay_ms / 1000.0)
-                serial = device.get("container_name", "").strip()
-                try:
-                    d = u2.connect(serial)
-                    edit = d(className="android.widget.EditText")
-                    if not edit.exists:
-                        self.log_message(f"✗ [{serial}] 未找到 EditText 控件")
-                        continue
-                    edit.set_text(text)
-                    self.log_message(f"✓ [{serial}] 已输入文字")
-                except Exception as e:
-                    self.log_message(f"✗ [{serial}] 输入失败: {e}")
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def _setup_click_text_bar(self, parent):
-        """脚本配置Tab：点击文字功能栏"""
-        bar = ttk.LabelFrame(parent, text="点击文字", padding=(8, 8))
-        bar.pack(fill=tk.X, pady=(0, 6), padx=2)
-
-        # 右侧：按钮
-        ttk.Button(bar, text="▶  点击文字", width=12,
-                   command=self._click_text_action).pack(side=tk.RIGHT, padx=(10, 0))
-
-        # 右侧：间隔
-        ttk.Label(bar, text="ms").pack(side=tk.RIGHT, padx=(2, 10))
-        self.click_text_delay_var = tk.StringVar(value="500")
-        ttk.Entry(bar, textvariable=self.click_text_delay_var, width=6).pack(side=tk.RIGHT)
-        ttk.Label(bar, text="间隔:").pack(side=tk.RIGHT, padx=(10, 2))
-
-        # 左侧：内容输入框
-        ttk.Label(bar, text="内容:").pack(side=tk.LEFT, padx=(0, 4))
-        self.click_text_var = tk.StringVar(value="")
-        ttk.Entry(bar, textvariable=self.click_text_var).pack(
-            side=tk.LEFT, fill=tk.X, expand=True)
-
-    def _click_text_action(self):
-        """点击文字按钮：u2 找 text/desc 包含输入内容的第一个元素并点击"""
-        keyword = self.click_text_var.get().strip()
-        if not keyword:
-            messagebox.showwarning("提示", "请输入要点击的文字内容")
-            return
-
-        try:
-            delay_ms = float(self.click_text_delay_var.get() or "500")
-        except ValueError:
-            delay_ms = 500.0
-
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-
-        self.log_message(f"▶ 点击文字 [{keyword}]，共 {len(devices)} 台设备，间隔 {delay_ms:.0f}ms")
-
-        def run():
-            try:
-                import uiautomator2 as u2
-            except ImportError:
-                self.log_message("✗ 未安装 uiautomator2，请先执行: pip install uiautomator2")
-                return
-
-            for idx, device in enumerate(devices):
-                if idx > 0 and delay_ms > 0:
-                    time.sleep(delay_ms / 1000.0)
-                serial = device.get("container_name", "").strip()
-                try:
-                    d = u2.connect(serial)
-                    # 优先匹配 text 包含，再匹配 description 包含
-                    el = d(textContains=keyword)
-                    if not el.exists:
-                        el = d(descriptionContains=keyword)
-                    if not el.exists:
-                        self.log_message(f"✗ [{serial}] 未找到包含 [{keyword}] 的元素")
-                        continue
-                    el[0].click()
-                    self.log_message(f"✓ [{serial}] 已点击包含 [{keyword}] 的元素")
-                except Exception as e:
-                    self.log_message(f"✗ [{serial}] 点击失败: {e}")
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def _show_add_app_dialog(self, on_success=None):
-        """公共弹窗：填写应用名称和包名，成功后回调 on_success(name, pkg)"""
-        dlg = tk.Toplevel(self.root)
-        dlg.title("添加自定义应用")
-        dlg.geometry("380x150")
-        dlg.resizable(False, False)
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        ttk.Label(dlg, text="应用名称:").grid(row=0, column=0, padx=14, pady=12, sticky="e")
-        name_var = tk.StringVar()
-        ttk.Entry(dlg, textvariable=name_var, width=28).grid(row=0, column=1, padx=(0, 14), pady=12)
-
-        ttk.Label(dlg, text="包名:").grid(row=1, column=0, padx=14, pady=4, sticky="e")
-        pkg_var = tk.StringVar()
-        ttk.Entry(dlg, textvariable=pkg_var, width=28).grid(row=1, column=1, padx=(0, 14), pady=4)
-
-        def on_ok():
-            name = name_var.get().strip()
-            pkg = pkg_var.get().strip()
-            if not name:
-                messagebox.showwarning("提示", "请输入应用名称", parent=dlg)
-                return
-            if not pkg:
-                messagebox.showwarning("提示", "请输入包名", parent=dlg)
-                return
-            existing = set(self._PRESET_APPS.keys()) | {a["name"] for a in self.custom_open_apps}
-            if name in existing:
-                messagebox.showinfo("提示", f'"{name}" 已在列表中', parent=dlg)
-                return
-            self.custom_open_apps.append({"name": name, "package": pkg})
-            self.save_config()
-            self.log_message(f"✓ 已添加应用: {name}  ({pkg})")
-            if on_success:
-                on_success(name, pkg)
-            dlg.destroy()
-
-        btn_row = ttk.Frame(dlg)
-        btn_row.grid(row=2, column=0, columnspan=2, pady=12)
-        ttk.Button(btn_row, text="确定", command=on_ok).pack(side=tk.LEFT, padx=8)
-        ttk.Button(btn_row, text="取消", command=dlg.destroy).pack(side=tk.LEFT, padx=8)
-        dlg.wait_window()
-
-    def _add_custom_open_app(self):
-        """脚本配置Tab 的「＋」按钮：弹窗添加应用后刷新该 Tab 下拉框"""
-        def on_success(name, pkg):
-            self._open_app_combo_values = list(self._PRESET_APPS.keys()) + \
-                [a["name"] for a in self.custom_open_apps]
-            if hasattr(self, "open_app_combo"):
-                self.open_app_combo["values"] = self._open_app_combo_values
-        self._show_add_app_dialog(on_success=on_success)
-
-    def _find_package_by_name(self, d, app_name):
-        """通过应用名在设备上找到真实包名，再由调用方 app_start(package)。
-        uiautomator2 app_start() 只接受包名，无法直接传应用名。
-        预置应用走映射表（快）；其余用一条 shell 命令批量查 label。
-        返回 package_name 或 None。"""
-        # 预置映射直接返回
-        if app_name in self._PRESET_APPS:
-            return self._PRESET_APPS[app_name]
-
-        # 用户自定义应用：有包名直接返回
-        for app in self.custom_open_apps:
-            if app["name"] == app_name:
-                return app["package"]
-
-        # 用 cmd package 一次性拿到所有 launcher 应用的包名+label
-        # 比逐个 app_info() 快很多
-        try:
-            raw = d.shell(
-                "cmd package query-activities"
-                " -a android.intent.action.MAIN"
-                " -c android.intent.category.LAUNCHER"
-                " --brief"
-            )
-            raw = getattr(raw, "output", raw) if not isinstance(raw, str) else raw
-
-            app_lower = app_name.lower()
-            for line in raw.splitlines():
-                line = line.strip()
-                if not line or line.startswith("No") or "/" not in line:
-                    continue
-                pkg = line.split("/")[0].strip()
-                if not pkg:
-                    continue
-                try:
-                    label = (d.app_info(pkg).get("label") or "").strip()
-                    if label.lower() == app_lower or app_lower in label.lower():
-                        return pkg
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        return None
-
-    def _open_app_action(self):
-        """点击打开按钮：用 uiautomator2 在所选设备上启动应用"""
-        app_name = self.open_app_var.get().strip()
-        if not app_name:
-            messagebox.showwarning("提示", "请先选择或输入要打开的应用")
-            return
-
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-
-        try:
-            delay = float(self.open_app_delay_var.get() or "3")
-        except ValueError:
-            delay = 3.0
-
-        self.log_message(f"▶ 开始打开 [{app_name}]，共 {len(devices)} 台设备，间隔 {delay}s")
-
-        def run():
-            try:
-                import uiautomator2 as u2
-            except ImportError:
-                self.log_message("✗ 未安装 uiautomator2，请先执行: pip install uiautomator2")
-                return
-
-            for idx, device in enumerate(devices):
-                if idx > 0 and delay > 0:
-                    time.sleep(delay)
-                serial = device.get("container_name", "").strip()
-                try:
-                    d = u2.connect(serial)
-                    package = self._find_package_by_name(d, app_name)
-                    if not package:
-                        self.log_message(f"✗ [{serial}] 未找到应用 '{app_name}'，请确认设备已安装该应用")
-                        continue
-                    d.app_start(package)
-                    self.log_message(f"✓ [{serial}] 已打开 {app_name}")
-                except Exception as e:
-                    self.log_message(f"✗ [{serial}] 打开失败: {e}")
-
-        threading.Thread(target=run, daemon=True).start()
-
+        self.root.after(100, lambda: self.paned_window.sashpos(0, 350))
     def _make_scrollable_tab(self, parent):
         """在 Tab Frame 内创建可滚动区域，返回内层 Frame 供子 setup 方法填充"""
-        bg = self._C.get("bg", "#f0f2f5")
-        canvas = tk.Canvas(parent, highlightthickness=0, bg=bg)
+        canvas = tk.Canvas(parent, highlightthickness=0)
         vsb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
         inner = ttk.Frame(canvas)
         inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
@@ -1900,63 +632,21 @@ class DeviceManageTool:
         canvas.configure(yscrollcommand=vsb.set)
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # 鼠标进入区域时绑定滚轮，离开时解绑，避免干扰其他滚动区域
-        def _on_wheel(e):
-            # macOS delta 为 ±1，Windows 为 ±120，统一处理
-            step = -1 if e.delta > 0 else 1
-            canvas.yview_scroll(step, "units")
-
-        def _bind_wheel(e):
-            canvas.bind_all("<MouseWheel>", _on_wheel)
-
-        def _unbind_wheel(e):
-            canvas.unbind_all("<MouseWheel>")
-
-        canvas.bind("<Enter>", _bind_wheel)
-        canvas.bind("<Leave>", _unbind_wheel)
-        inner.bind("<Enter>", _bind_wheel)
-        inner.bind("<Leave>", _unbind_wheel)
-
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
         return inner
-
-    def _add_tab_log_pane(self, paned):
-        """向 PanedWindow 添加日志区，注册到广播列表，返回 ScrolledText"""
-        log_frame = ttk.LabelFrame(paned, text="运行日志", padding=3)
-        paned.add(log_frame, weight=0)
-        lt = scrolledtext.ScrolledText(
-            log_frame, height=3, width=40,
-            font=("Menlo", 9),
-            bg="#1e2433", fg="#a8c7fa",
-            insertbackground="#a8c7fa",
-            selectbackground="#2d4a7a",
-            selectforeground="white",
-            relief="flat", borderwidth=0,
-        )
-        lt.pack(fill=tk.BOTH, expand=True)
-        self._tab_log_texts.append(lt)
-        return lt
 
     def _build_platform_tab(self, parent, prefix, count=5):
         """为平台 Tab 创建 count 个通用配置行，StringVar 存为 self.{prefix}_cfg{N}"""
-        paned = ttk.PanedWindow(parent, orient=tk.VERTICAL)
-        paned.pack(fill=tk.BOTH, expand=True)
-
-        top = ttk.Frame(paned)
-        paned.add(top, weight=1)
-
         for i in range(1, count + 1):
             var = tk.StringVar()
             setattr(self, f"{prefix}_cfg{i}", var)
-            row = ttk.Frame(top)
+            row = ttk.Frame(parent)
             row.pack(fill=tk.X, pady=5, padx=8)
             ttk.Label(row, text=f"配置{i}:", width=8, anchor="w").pack(side=tk.LEFT)
             e = ttk.Entry(row, textvariable=var)
             e.pack(side=tk.LEFT, fill=tk.X, expand=True)
             e.bind("<FocusOut>", lambda ev: self.save_config())
             e.bind("<Return>", lambda ev: self.save_config())
-
-        self._add_tab_log_pane(paned)
 
     def _setup_socks5_tab(self, parent):
         """Web UI: SOCKS5配置Tab"""
@@ -2005,259 +695,151 @@ class DeviceManageTool:
         ttk.Button(btn_frame, text="✅ 启用代理", command=self.set_socks5_proxy).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
         ttk.Button(btn_frame, text="🚫 停止代理", command=self.stop_socks5_proxy).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
-    def _setup_push_file_bar(self, parent):
-        """脚本配置Tab：Push文件到手机（两行布局）"""
-        bar = ttk.LabelFrame(parent, text="往手机推送文件 (Push)", padding=(8, 8))
-        bar.pack(fill=tk.X, pady=(0, 6), padx=2)
-
-        # 第一行：本地文件
-        row1 = ttk.Frame(bar)
-        row1.pack(fill=tk.X, pady=(0, 4))
-        ttk.Button(row1, text="选择文件", width=8,
-                   command=self._push_select_file).pack(side=tk.RIGHT)
-        ttk.Label(row1, text="本地文件:").pack(side=tk.LEFT, padx=(0, 4))
-        self.push_local_var = tk.StringVar()
-        ttk.Entry(row1, textvariable=self.push_local_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
-
-        # 第二行：手机目录 + Push按钮
-        row2 = ttk.Frame(bar)
-        row2.pack(fill=tk.X)
-        ttk.Button(row2, text="▶  Push", width=10,
-                   command=self._push_file_action).pack(side=tk.RIGHT, padx=(10, 0))
-        ttk.Label(row2, text="手机目录:").pack(side=tk.LEFT, padx=(0, 4))
-        self.push_remote_var = tk.StringVar(value="")
-        ttk.Entry(row2, textvariable=self.push_remote_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
-        ttk.Label(row2, text="(空=默认/sdcard/)", foreground="#9ca3af").pack(side=tk.LEFT)
-
-    def _push_select_file(self):
-        from tkinter import filedialog
-        path = filedialog.askopenfilename(title="选择要 Push 的文件")
-        if path:
-            self.push_local_var.set(path)
-
-    def _push_file_action(self):
-        local = self.push_local_var.get().strip()
-        if not local:
-            messagebox.showwarning("提示", "请先选择本地文件")
-            return
-        remote = self.push_remote_var.get().strip() or "/sdcard/"
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-        self.log_message(f"▶ Push「{local}」→ {remote}，共 {len(devices)} 台设备")
-
-        def run():
-            for device in devices:
-                serial = device.get("container_name", "").strip()
-                try:
-                    if remote not in ("/sdcard/", "/sdcard"):
-                        subprocess.run(["adb", "-s", serial, "shell", "mkdir", "-p", remote],
-                                       capture_output=True, timeout=15)
-                    result = subprocess.run(["adb", "-s", serial, "push", local, remote],
-                                            capture_output=True, text=True, timeout=120)
-                    if result.returncode == 0:
-                        self.log_message(f"✓ [{serial}] Push 成功")
-                    else:
-                        self.log_message(f"✗ [{serial}] Push 失败: {result.stderr.strip()}")
-                except Exception as e:
-                    self.log_message(f"✗ [{serial}] Push 异常: {e}")
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def _setup_pull_file_bar(self, parent):
-        """脚本配置Tab：从手机拉取文件（两行布局）"""
-        bar = ttk.LabelFrame(parent, text="从手机拉取文件 (Pull)", padding=(8, 8))
-        bar.pack(fill=tk.X, pady=(0, 6), padx=2)
-
-        # 第一行：手机文件路径
-        row1 = ttk.Frame(bar)
-        row1.pack(fill=tk.X, pady=(0, 4))
-        ttk.Label(row1, text="手机文件:").pack(side=tk.LEFT, padx=(0, 4))
-        self.pull_remote_var = tk.StringVar(value="/sdcard/")
-        ttk.Entry(row1, textvariable=self.pull_remote_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # 第二行：本地保存目录 + Pull按钮
-        row2 = ttk.Frame(bar)
-        row2.pack(fill=tk.X)
-        ttk.Button(row2, text="▶  Pull", width=10,
-                   command=self._pull_file_action).pack(side=tk.RIGHT, padx=(10, 0))
-        ttk.Button(row2, text="选择文件夹", width=9,
-                   command=self._pull_select_dir).pack(side=tk.RIGHT, padx=(0, 4))
-        ttk.Label(row2, text="保存到:").pack(side=tk.LEFT, padx=(0, 4))
-        self.pull_local_var = tk.StringVar(value="")
-        ttk.Entry(row2, textvariable=self.pull_local_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
-
-    def _pull_select_dir(self):
-        from tkinter import filedialog
-        path = filedialog.askdirectory(title="选择本地保存目录")
-        if path:
-            self.pull_local_var.set(path)
-
-    def _pull_file_action(self):
-        remote = self.pull_remote_var.get().strip()
-        if not remote:
-            messagebox.showwarning("提示", "请输入手机上的文件路径")
-            return
-        local = self.pull_local_var.get().strip() or "."
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-        self.log_message(f"▶ Pull「{remote}」→「{local}」，共 {len(devices)} 台设备")
-
-        def run():
-            for device in devices:
-                serial = device.get("container_name", "").strip()
-                try:
-                    result = subprocess.run(["adb", "-s", serial, "pull", remote, local],
-                                            capture_output=True, text=True, timeout=120)
-                    if result.returncode == 0:
-                        self.log_message(f"✓ [{serial}] Pull 成功 → {local}")
-                    else:
-                        self.log_message(f"✗ [{serial}] Pull 失败: {result.stderr.strip()}")
-                except Exception as e:
-                    self.log_message(f"✗ [{serial}] Pull 异常: {e}")
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def _setup_screenshot_bar(self, parent):
-        """脚本配置Tab：截图并拉取到本地"""
-        bar = ttk.LabelFrame(parent, text="截图", padding=(8, 8))
-        bar.pack(fill=tk.X, pady=(0, 6), padx=2)
-
-        # 右侧按钮先占位
-        ttk.Button(bar, text="▶  截图", width=10,
-                   command=self._screenshot_action).pack(side=tk.RIGHT, padx=(10, 0))
-        ttk.Button(bar, text="选择目录", width=8,
-                   command=self._screenshot_select_dir).pack(side=tk.RIGHT, padx=(0, 4))
-
-        ttk.Label(bar, text="保存到:").pack(side=tk.LEFT, padx=(0, 4))
-        self.screenshot_dir_var = tk.StringVar(value="")
-        ttk.Entry(bar, textvariable=self.screenshot_dir_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
-        ttk.Label(bar, text="(空=当前目录)", foreground="#9ca3af").pack(side=tk.LEFT)
-
-    def _screenshot_select_dir(self):
-        from tkinter import filedialog
-        path = filedialog.askdirectory(title="选择截图保存目录")
-        if path:
-            self.screenshot_dir_var.set(path)
-
-    def _screenshot_action(self):
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-        save_dir = self.screenshot_dir_var.get().strip() or "."
-        self.log_message(f"▶ 截图，共 {len(devices)} 台设备，保存至「{save_dir}」")
-
-        def run():
-            import time as _time
-            for device in devices:
-                serial = device.get("container_name", "").strip()
-                remote_path = f"/sdcard/_screenshot_{serial}_{int(_time.time())}.png"
-                try:
-                    # 截图
-                    r1 = subprocess.run(
-                        ["adb", "-s", serial, "shell", "screencap", "-p", remote_path],
-                        capture_output=True, timeout=15
-                    )
-                    if r1.returncode != 0:
-                        self.log_message(f"✗ [{serial}] 截图失败")
-                        continue
-                    # Pull 到本地
-                    r2 = subprocess.run(
-                        ["adb", "-s", serial, "pull", remote_path, save_dir],
-                        capture_output=True, text=True, timeout=30
-                    )
-                    # 删除手机上的临时截图
-                    subprocess.run(
-                        ["adb", "-s", serial, "shell", "rm", remote_path],
-                        capture_output=True, timeout=10
-                    )
-                    if r2.returncode == 0:
-                        self.log_message(f"✓ [{serial}] 截图已保存到「{save_dir}」")
-                    else:
-                        self.log_message(f"✗ [{serial}] Pull 截图失败: {r2.stderr.strip()}")
-                except Exception as e:
-                    self.log_message(f"✗ [{serial}] 截图异常: {e}")
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def _setup_install_apk_bar(self, parent):
-        """脚本配置Tab：安装 APK"""
-        bar = ttk.LabelFrame(parent, text="安装应用 (APK)", padding=(8, 8))
-        bar.pack(fill=tk.X, pady=(0, 6), padx=2)
-
-        ttk.Button(bar, text="▶  安装", width=10,
-                   command=self._install_apk_action).pack(side=tk.RIGHT, padx=(10, 0))
-        ttk.Button(bar, text="选择 APK", width=9,
-                   command=self._install_apk_select).pack(side=tk.RIGHT, padx=(0, 4))
-        ttk.Label(bar, text="APK:").pack(side=tk.LEFT, padx=(0, 4))
-        self.install_apk_var = tk.StringVar()
-        ttk.Entry(bar, textvariable=self.install_apk_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-    def _install_apk_select(self):
-        from tkinter import filedialog
-        path = filedialog.askopenfilename(title="选择 APK 文件", filetypes=[("APK 文件", "*.apk"), ("所有文件", "*.*")])
-        if path:
-            self.install_apk_var.set(path)
-
-    def _install_apk_action(self):
-        apk = self.install_apk_var.get().strip()
-        if not apk:
-            messagebox.showwarning("提示", "请先选择 APK 文件")
-            return
-        devices = self.get_selected_devices()
-        if not devices:
-            messagebox.showwarning("提示", "请先在左侧勾选要操作的设备")
-            return
-        self.log_message(f"▶ 安装「{apk}」，共 {len(devices)} 台设备")
-
-        def run():
-            for device in devices:
-                serial = device.get("container_name", "").strip()
-                try:
-                    result = subprocess.run(
-                        ["adb", "-s", serial, "install", "-r", apk],
-                        capture_output=True, text=True, timeout=120
-                    )
-                    output = (result.stdout + result.stderr).strip()
-                    if result.returncode == 0 and "Success" in output:
-                        self.log_message(f"✓ [{serial}] 安装成功")
-                    else:
-                        self.log_message(f"✗ [{serial}] 安装失败: {output}")
-                except Exception as e:
-                    self.log_message(f"✗ [{serial}] 安装异常: {e}")
-
-        threading.Thread(target=run, daemon=True).start()
-
     def _setup_script_config_tab(self, parent):
-        """Web UI: 脚本配置Tab（只保留昵称设置，其余变量静默初始化供 save_config 使用）"""
-        # 昵称设置（显示）
+        """Web UI: 脚本配置Tab"""
+        # 1. 昵称设置
         lang_frame = ttk.LabelFrame(parent, text="昵称设置", padding=5)
         lang_frame.pack(fill=tk.X, pady=(0, 5))
-        self.name_lang_var = tk.StringVar(value="中文")
+        
         ttk.Label(lang_frame, text="昵称设置:").pack(side=tk.LEFT, padx=5)
+        self.name_lang_var = tk.StringVar(value="中文")
         ttk.Radiobutton(lang_frame, text="中文", variable=self.name_lang_var, value="中文").pack(side=tk.LEFT, padx=5)
         ttk.Radiobutton(lang_frame, text="英文", variable=self.name_lang_var, value="英文").pack(side=tk.LEFT, padx=5)
-        self.name_lang_var.trace_add("write", lambda *args: self.save_config())
+        
+        # 1.1 国家选择设置
+        country_frame = ttk.LabelFrame(parent, text="国家选择", padding=5)
+        country_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        ttk.Label(country_frame, text="国家名称:").pack(side=tk.LEFT, padx=5)
+        self.country_entry = ttk.Entry(country_frame, width=20)
+        self.country_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Label(country_frame, text="(例如: United States)", foreground="gray").pack(side=tk.LEFT, padx=5)
 
-        # 以下变量供 save_config / load_config 使用，不创建可见 UI
-        _h = ttk.Frame(parent)   # 隐藏容器，不 pack，仅作为 Entry 的 master
-        self.country_entry        = ttk.Entry(_h); self.country_entry.insert(0, "")
-        self.char_mode_var        = tk.IntVar(value=0)
-        self.pwd_mode_var         = tk.StringVar(value="prefix")
-        self.pwd_prefix_entry     = ttk.Entry(_h)
-        self.pwd_custom_entry     = ttk.Entry(_h)
-        self.skip_count_entry     = ttk.Entry(_h); self.skip_count_entry.insert(0, "0")
-        self.tiktok_mode_var      = tk.StringVar(value="phone")
-        self.jump_mode_var        = tk.IntVar(value=0)
-        self.channel3_mode_var    = tk.IntVar(value=0)
-        self.channel1_mode_var    = tk.IntVar(value=0)
-        self.accessibility_mode_var   = tk.IntVar(value=0)
+        # 字符模式（打码用）
+        # 勾选：请求打码时传 mode='char'（更偏字符/细粒度识别）
+        self.char_mode_var = tk.IntVar(value=0)
+        chk_char_mode = ttk.Checkbutton(country_frame, text="字符模式(char)", variable=self.char_mode_var, command=self.save_config)
+        chk_char_mode.pack(side=tk.RIGHT, padx=5)
+        
+        # Auto-save triggers
+        self.country_entry.bind("<FocusOut>", lambda e: self.save_config())
+        self.country_entry.bind("<Return>", lambda e: self.save_config())
+        
+        # 2. 密码设置
+        pwd_frame = ttk.LabelFrame(parent, text="密码设置", padding=5)
+        pwd_frame.pack(fill=tk.X, pady=5)
+        
+        # Single row layout
+        # Single row layout
+        self.pwd_mode_var = tk.StringVar(value="prefix")
+        
+        # Prefix Mode
+        ttk.Radiobutton(pwd_frame, text="前缀:", variable=self.pwd_mode_var, value="prefix").pack(side=tk.LEFT, padx=(5, 2))
+        self.pwd_prefix_entry = ttk.Entry(pwd_frame, width=12)
+        self.pwd_prefix_entry.pack(side=tk.LEFT, padx=2)
+        
+        # Custom Mode
+        ttk.Radiobutton(pwd_frame, text="自定义:", variable=self.pwd_mode_var, value="custom").pack(side=tk.LEFT, padx=(10, 2))
+        self.pwd_custom_entry = ttk.Entry(pwd_frame, width=12)
+        self.pwd_custom_entry.pack(side=tk.LEFT, padx=2)
+        
+        # Random Mode
+        ttk.Radiobutton(pwd_frame, text="随机复杂", variable=self.pwd_mode_var, value="random").pack(side=tk.LEFT, padx=(10, 2))
+        
+        # Auto-save triggers
+        self.pwd_prefix_entry.bind("<FocusOut>", lambda e: self.save_config())
+        self.pwd_prefix_entry.bind("<Return>", lambda e: self.save_config())
+        self.pwd_custom_entry.bind("<FocusOut>", lambda e: self.save_config())
+        self.pwd_custom_entry.bind("<Return>", lambda e: self.save_config())
+        self.name_lang_var.trace_add("write", lambda *args: self.save_config())
+        self.pwd_mode_var.trace_add("write", lambda *args: self.save_config())
+
+        # 3. 运行设置
+        run_frame = ttk.LabelFrame(parent, text="运行设置", padding=5)
+        run_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(run_frame, text="跳码次数:").pack(side=tk.LEFT, padx=5)
+        self.skip_count_entry = ttk.Entry(run_frame, width=8)
+        self.skip_count_entry.insert(0, "0")
+        self.skip_count_entry.pack(side=tk.LEFT, padx=5)
+        
+        self.skip_count_entry.bind("<FocusOut>", lambda e: self.save_config())
+        self.skip_count_entry.bind("<Return>", lambda e: self.save_config())
+        
+        # 跳码模式勾选框
+        self.jump_mode_var = tk.IntVar(value=0)
+        chk_jump_mode = tk.Checkbutton(run_frame, text="跳码模式", variable=self.jump_mode_var, bg='#f0f0f0')
+        chk_jump_mode.pack(side=tk.LEFT, padx=(10, 5))
+        self.jump_mode_var.trace_add("write", lambda *args: self._on_jump_mode_changed())
+        
+        # 通道三模式勾选框
+        self.channel3_mode_var = tk.IntVar(value=0)
+        chk_channel3_mode = tk.Checkbutton(run_frame, text="通道三模式", variable=self.channel3_mode_var, bg='#f0f0f0')
+        chk_channel3_mode.pack(side=tk.LEFT, padx=(10, 5))
+        self.channel3_mode_var.trace_add("write", lambda *args: self._on_channel3_mode_changed())
+
+        # 通道一模式勾选框
+        self.channel1_mode_var = tk.IntVar(value=0)
+        chk_channel1_mode = tk.Checkbutton(run_frame, text="通道一模式", variable=self.channel1_mode_var, bg='#f0f0f0')
+        chk_channel1_mode.pack(side=tk.LEFT, padx=(10, 5))
+        self.channel1_mode_var.trace_add("write", lambda *args: self._on_channel1_mode_changed())
+
+        # 无障碍模式勾选框（不使用打码服务，点击# 無障礙方式）
+        self.accessibility_mode_var = tk.IntVar(value=0)
+        chk_accessibility_mode = tk.Checkbutton(run_frame, text="无障碍模式", variable=self.accessibility_mode_var, bg='#f0f0f0')
+        chk_accessibility_mode.pack(side=tk.LEFT, padx=(10, 5))
+        self.accessibility_mode_var.trace_add("write", lambda *args: self.save_config())
+
+        # 授权企业勾选框
         self.authorized_enterprise_var = tk.IntVar(value=0)
-        self.upload_platform_var  = tk.IntVar(value=0)
+        chk_authorized_enterprise = tk.Checkbutton(run_frame, text="授权企业", variable=self.authorized_enterprise_var, bg='#f0f0f0')
+        chk_authorized_enterprise.pack(side=tk.LEFT, padx=(10, 5))
+        self.authorized_enterprise_var.trace_add("write", lambda *args: self.save_config())
+
+        # 上传平台勾选框
+        self.upload_platform_var = tk.IntVar(value=0)
+        chk_upload_platform = tk.Checkbutton(run_frame, text="上传平台", variable=self.upload_platform_var, bg='#f0f0f0')
+        chk_upload_platform.pack(side=tk.LEFT, padx=(10, 5))
+        self.upload_platform_var.trace_add("write", lambda *args: self.save_config())
+
+        # 3.5 平台取号设置
+        platform_frame = ttk.LabelFrame(parent, text="平台取号", padding=5)
+        platform_frame.pack(fill=tk.X, pady=5)
+
+        chk_platform = tk.Checkbutton(
+            platform_frame,
+            text="启用平台取号（启用后不从“手机号管理”取号）",
+            variable=self.platform_phone_var,
+            bg='#f0f0f0',
+            command=self.save_config
+        )
+        chk_platform.pack(anchor="w")
+
+        rowp = ttk.Frame(platform_frame)
+        rowp.pack(fill=tk.X, pady=2)
+
+        ttk.Label(rowp, text="平台:").pack(side=tk.LEFT)
+        platform_combo = ttk.Combobox(
+            rowp,
+            textvariable=self.platform_name_var,
+            width=8,
+            state="readonly",
+            values=["tg"]
+        )
+        platform_combo.pack(side=tk.LEFT, padx=(5, 15))
+        platform_combo.bind("<<ComboboxSelected>>", lambda e: self.save_config())
+
+        ttk.Button(rowp, text="配置Key", command=self._open_platform_phone_dialog).pack(side=tk.LEFT)
+
+        # 4. TikTok设置
+        tt_frame = ttk.LabelFrame(parent, text="TikTok设置", padding=5)
+        tt_frame.pack(fill=tk.X, pady=5)
+        
+        self.tiktok_mode_var = tk.StringVar(value="phone")
+        ttk.Radiobutton(tt_frame, text="手机注册", variable=self.tiktok_mode_var, value="phone").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(tt_frame, text="邮箱注册", variable=self.tiktok_mode_var, value="email").pack(side=tk.LEFT, padx=5)
+        
+        self.tiktok_mode_var.trace_add("write", lambda *args: self.save_config())
 
     def _open_platform_phone_dialog(self):
         """平台取号配置弹窗：选择平台/输入key/参数"""
@@ -2615,90 +1197,235 @@ class DeviceManageTool:
         return [os.path.basename(f) for f in files if os.path.basename(f) != "__init__.py"]
 
     def run_selected_script(self):
-        """运行脚本：自定义脚本Tab → 执行自定义脚本；其他Tab → 执行脚本配置里的脚本"""
-        try:
-            active_tab = self.main_notebook.tab(self.main_notebook.select(), "text")
-        except Exception:
-            active_tab = ""
-        if active_tab == "自定义脚本":
-            self._cs_run()
-            return
-
+        """运行 scripts/ 目录中的脚本"""
+        self.log_message("11111111")
         scripts = self._refresh_script_list()
         if not scripts:
              #messagebox.showwarning("提示", "scripts/ 目录中没有可用脚本")
              return
         script_name = scripts[0]
         script_path = os.path.join(self._get_app_path(), "scripts", script_name)
-
+        
         devices = self.get_selected_devices()
         if not devices:
              messagebox.showwarning("提示", "请先在左侧勾选要运行的设备")
              return
-
+             
         self.log_message(f"正在为 {len(devices)} 台设备启动任务: {script_name}")
+        
+        # 收集容器配置
+        container_config = {}
+        
+        # 桥接模式设置（无论是否重建容器都需要，用于正确判断连接IP和端口）
+        if self.bridge_mode_var.get() == 1:
+            container_config['useBridge'] = True
 
+        # 重建模式
+        rebuild_mode = self.rebuild_mode_var.get()
+        container_config['rebuild_mode'] = rebuild_mode
+        container_config['max_failures'] = self.max_failures_var.get().strip() or "3"
 
+        # 无障碍模式（不使用打码服务）
+        container_config['accessibility_mode'] = self.accessibility_mode_var.get()
+
+        # 授权企业
+        container_config['authorized_enterprise'] = self.authorized_enterprise_var.get()
+
+        # 上传平台
+        container_config['upload_platform'] = self.upload_platform_var.get()
+
+        # 重建容器相关的配置（仅当需要重建时需要）
+        if rebuild_mode != "不重建":
+             container_config['image_keyword'] = self.image_keyword_var.get().strip() or "P14"
+             container_config['dns'] = self.entry_dns.get().strip()
+             
+             # Model
+             if self.static_model_var.get() == 1:
+                 # 指定随机机型：从用户输入的机型列表中随机
+                 custom_models_str = self.custom_model_list_var.get().strip()
+                 if custom_models_str:
+                     container_config['custom_model_list'] = custom_models_str
+                     container_config['random_model'] = True  # 标记为随机，但使用自定义列表
+                 else:
+                     # 如果没有输入机型，回退到普通模式
+                     container_config['model_name'] = self.entry_model.get().strip()
+                     container_config['model_id'] = self.online_models.get(container_config['model_name'], "")
+             elif self.random_model_var.get() == 1 and self.online_models:
+                 # 普通随机机型：从机型库中随机
+                 container_config['random_model'] = True
+             else:
+                 container_config['model_name'] = self.entry_model.get().strip()
+                 container_config['model_id'] = self.online_models.get(container_config['model_name'], "")
+             
+             # Region
+             region_name = self.entry_region.get()
+             reg_data = self.region_presets.get(region_name, {"tz": "America/New_York", "cc": "US"})
+             container_config['timezone'] = reg_data["tz"]
+             container_config['countryCode'] = reg_data["cc"]
+             
+             # GMS
+             container_config['gms'] = "1" if self.gms_var.get() == 1 else "0"
+             
+             # 注意：静态机型（modelStatic）需要设备本地已存在的备份机型数据
+             # 而机型下拉列表中的是在线机型，所以"静态机型"选项实际上使用在线机型（modelId/modelName）
+             # 如果用户需要真正的静态机型，需要手动在设备上备份机型数据
+             # 这里不设置 modelStatic，让系统使用 modelId 和 modelName
+             
+             # 镜像版本（如果填写了，用于精确匹配镜像）
+             image_version = self.image_version_var.get().strip()
+             if image_version:
+                 container_config['image_version'] = image_version
+        
+        # 重建次数（无论是否重建容器都需要，用于脚本内循环控制）
+        rebuild_mode = self.rebuild_mode_var.get()
+        max_failures = self.max_failures_var.get().strip() or "3"
+        container_config['max_failures'] = max_failures
 
         for device in devices:
              # 启动独立线程处理每台设备的 收到/运行 逻辑
              threading.Thread(target=self._run_script_worker, 
-                              args=(device, script_path),
+                              args=(device, script_path, container_config),
                               daemon=True).start()
 
-    def _run_script_worker(self, device, script_path):
-        """设备任务工作线程：运行脚本"""
-        serial = device.get("container_name", "").lstrip("/")
-        ip = device.get("ip", "")
-        key = (serial, ip)
+    def _run_script_worker(self, device, script_path, container_config):
+        """设备任务工作线程：重建(可选) -> 运行脚本"""
+        container_name = device["container_name"].lstrip("/")
+        ip = device.get("ip")
+        rpa_port = device.get("rpa_port", 30002)
+        host_ip = device.get("host_ip") or ip
+        index = device.get("instance_index", 1)
+        
+        key = (container_name, ip)
+        
+        # 判断是否为桥接模式
+        is_bridge_mode = container_config.get('useBridge', False)
 
+        # 获取重建模式
+        rebuild_mode = container_config.get('rebuild_mode', '不重建')
+
+        # 1. 重建容器
+        # 初始化 dev_config，避免后续使用时报错
+        dev_config = container_config
+
+        # 对于随机机型（指定随机或普通随机），在重建时每台设备单独随机选择机型
+        if rebuild_mode in ["重建容器(删除创建)", "不删除重建（成功保留/失败删除）"]:
+            # 对于随机机型，在这里每一台设备单独随一个
+            if container_config.get('random_model'):
+                import random
+                # 检查是否是指定随机机型（有自定义机型列表）
+                if container_config.get('custom_model_list'):
+                    # 从用户输入的机型列表中随机选择
+                    custom_models_str = container_config['custom_model_list']
+                    # 解析机型列表（支持逗号、空格、换行分隔）
+                    model_names = [m.strip() for m in custom_models_str.replace('\n', ',').replace('，', ',').split(',') if m.strip()]
+                    if model_names:
+                        m_name = random.choice(model_names)
+                        # 从online_models中查找对应的ID
+                        m_id = self.online_models.get(m_name, "")
+                        if not m_id:
+                            self.log_message(f"⚠️ [{container_name}] 机型 '{m_name}' 不在机型库中，将使用名称作为ID")
+                            m_id = m_name
+                    else:
+                        self.log_message(f"⚠️ [{container_name}] 自定义机型列表为空，使用默认机型")
+                        m_name = self.entry_model.get().strip()
+                        m_id = self.online_models.get(m_name, "")
+                else:
+                    # 普通随机机型：从机型库中随机
+                    m_name = random.choice(list(self.online_models.keys()))
+                    m_id = self.online_models[m_name]
+                
+                # 复制一份配置避免污染全局
+                dev_config = container_config.copy()
+                dev_config['model_name'] = m_name
+                dev_config['model_id'] = m_id
+                self.log_message(f"🎲 [{container_name}] 随机机型: {m_name}")
+            else:
+                dev_config = container_config
+            
+            if rebuild_mode == "重建容器(删除创建)":
+                if not self._reset_device_container(host_ip, index, container_name, dev_config):
+                    self.log_message(f"❌ [{container_name}] 容器重建失败，终止任务")
+                    return
+            # 不删除重建模式：dev_config 已准备好，稍后传递给脚本
+
+        # 2. 确定连接IP和端口（传递配置以正确判断桥接模式）
+        target_ip, target_port, is_bridge = self._get_device_connection_info(device, container_config)
+        mode_str = "桥接" if is_bridge else "非桥接"
+        self.log_message(f"{'🌐' if is_bridge else '🔗'} [{container_name}] {mode_str}模式: {target_ip}:{target_port}")
+
+        # 3. 启动脚本
+        # 检查是否已有任务 (重建过程可能耗时，再次检查)
+        if key in self.running_tasks:
+             if self.running_tasks[key].poll() is None:
+                 self.log_message(f"⚠️ [{container_name}] 任务已在运行，跳过")
+                 return
+             del self.running_tasks[key]
+
+        cmd = [sys.executable, script_path,
+               "--ip", target_ip,
+               "--port", str(target_port),
+               "--index", str(index)]
+        
+        # 传递完整配置 (用于脚本内无限循环重建)
+        # 传递重建标志和重建模式
+        if rebuild_mode in ["重建容器(删除创建)", "不删除重建（成功保留/失败删除）"]:
+            cmd.append("--rebuild")
+            max_failures = dev_config.get('max_failures', '3')
+            cmd.extend(["--rebuild-count", max_failures])
+            # 不删除重建：成功则不删当前容器只新建；失败N次后删除重建
+            if rebuild_mode == "不删除重建（成功保留/失败删除）":
+                cmd.append("--no-delete-on-success")
+
+        # 授权企业模式：成功后在新建/删除容器前先执行后续步骤
+        if dev_config.get('authorized_enterprise', 0) == 1:
+            cmd.append("--authorized-enterprise")
+            
+        # self.log_message(f"启动任务 (Env Config): {' '.join(cmd)}")
+        
+        # 准备环境变量
+        env = os.environ.copy()
+        if dev_config:
+            try:
+                # 确保 host_ip 被传递到脚本环境变量中（用于循环重置容器）
+                dev_config['host_ip'] = host_ip
+                env['MYT_CONTAINER_CONFIG'] = json.dumps(dev_config)
+            except: pass
+        
         # 获取应用路径
         app_path = self._get_app_path()
-
-        # 创建log目录
+        
+        # 创建log目录（如果不存在）
         log_dir = os.path.join(app_path, 'log')
         try:
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
-        except Exception:
-            pass
-
-        # 如果已有任务在运行则跳过
-        if key in self.running_tasks:
-            if self.running_tasks[key].poll() is None:
-                self.log_message(f"⚠️ [{serial}] 任务已在运行，跳过")
-                return
-            del self.running_tasks[key]
-
-        cmd = [sys.executable, script_path,
-               "--serial", serial,
-               "--index", str(device.get("instance_index", 1))]
-
-        try:
-            startupinfo = None
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                text=True,
-                bufsize=1,
-                startupinfo=startupinfo,
-                encoding='utf-8',
-                errors='replace',
-                cwd=app_path,
-            )
-
-            self.running_tasks[key] = proc
-            self.log_message(f"✅ [{serial}] 脚本已启动 (PID: {proc.pid})")
-            self._monitor_process_output(proc, serial)
-
         except Exception as e:
-            self.log_message(f"❌ [{serial}] 启动失败: {e}")
+            pass
+        
+        try:
+             startupinfo = None
+             if os.name == 'nt':
+                 startupinfo = subprocess.STARTUPINFO()
+                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+             
+             proc = subprocess.Popen(cmd, 
+                                     stdout=subprocess.PIPE, 
+                                     stderr=subprocess.STDOUT,
+                                     stdin=subprocess.DEVNULL,
+                                     text=True, 
+                                     bufsize=1,
+                                     startupinfo=startupinfo,
+                                     encoding='utf-8', 
+                                     errors='replace',
+                                     env=env,
+                                     cwd=app_path)  # 设置工作目录为应用目录
+             
+             self.running_tasks[key] = proc
+             self.log_message(f"✅ [{container_name}] 脚本已启动 (PID: {proc.pid})")
+             self._monitor_process_output(proc, container_name)
+             
+        except Exception as e:
+             self.log_message(f"❌ [{container_name}] 启动失败 {e}")
 
     def _reset_device_container(self, host_ip, index, old_container_name, config):
         """执行容器重建操作 (使用统一的 ContainerManager)"""
@@ -2780,19 +1507,6 @@ class DeviceManageTool:
 
     def toggle_pause_selected_script(self):
         """暂停/继续选中的脚本任务（基于 psutil 挂起/恢复子进程）"""
-        try:
-            active_tab = self.main_notebook.tab(self.main_notebook.select(), "text")
-        except Exception:
-            active_tab = ""
-        if active_tab == "自定义脚本":
-            if self._cs_pause_event.is_set():
-                self._cs_pause_event.clear()
-                self.log_message("▶ 自定义脚本已继续")
-            else:
-                self._cs_pause_event.set()
-                self.log_message("⏸ 自定义脚本已暂停")
-            return
-
         if psutil is None:
             messagebox.showwarning("提示", "未安装 psutil，无法使用暂停/继续功能。\n请先执行: pip install psutil")
             return
@@ -2834,17 +1548,6 @@ class DeviceManageTool:
 
     def stop_selected_script(self):
         """停止选中的脚本任务"""
-        try:
-            active_tab = self.main_notebook.tab(self.main_notebook.select(), "text")
-        except Exception:
-            active_tab = ""
-        if active_tab == "自定义脚本":
-            self._cs_stop_event.set()
-            self._cs_pause_event.clear()  # 若暂停中，先解除阻塞让线程感知到停止
-            self._watch_stop_if_running()
-            self.log_message("⏹ 自定义脚本已停止")
-            return
-
         devices = self.get_selected_devices()
         if not devices:
              messagebox.showwarning("提示", "请先在左侧勾选设备")
@@ -2961,44 +1664,30 @@ class DeviceManageTool:
                 except Exception:
                     should_autoscroll = True
 
-                all_logs = [self.log_text]
+                self.log_text.insert(tk.END, message + "\n")
                 if hasattr(self, "script_log_text"):
-                    all_logs.append(self.script_log_text)
-                all_logs.extend(getattr(self, "_tab_log_texts", []))
+                    self.script_log_text.insert(tk.END, message + "\n")
 
-                for lt in all_logs:
-                    try:
-                        lt.configure(state=tk.NORMAL)
-                        lt.insert(tk.END, message + "\n")
-                        lt.configure(state=tk.DISABLED)
-                        # 有选中文本时跳过自动滚动，避免 Tk 内部事件冲突卡死 UI
-                        if should_autoscroll and not lt.tag_ranges("sel"):
-                            lt.see(tk.END)
-                    except Exception:
-                        pass
+                if should_autoscroll:
+                    self.log_text.see(tk.END)
+                    if hasattr(self, "script_log_text"):
+                        self.script_log_text.see(tk.END)
         except queue.Empty:
             pass
         self.root.after(100, self.process_log_queue)
     
     def _on_device_name_double_click(self, event):
-        """双击设备行：SN码列 → scrcpy 投屏；昵称列 → 编辑昵称"""
+        """双击容器名列弹出编辑框"""
         if self.device_tree.identify_region(event.x, event.y) != "cell":
             return
-        col = self.device_tree.identify_column(event.x)
+        if self.device_tree.identify_column(event.x) != "#3":  # 容器名是第3列
+            return
         item = self.device_tree.identify_row(event.y)
         if not item:
             return
 
         tags = self.device_tree.item(item, "tags")
-        serial = tags[0] if tags else self.device_tree.item(item, "values")[3]
-
-        # 双击 SN码列（第4列）→ scrcpy 投屏
-        if col == "#4":
-            self._launch_scrcpy(serial)
-            return
-
-        if col != "#3":  # 非昵称列不处理
-            return
+        serial = tags[0] if tags else self.device_tree.item(item, "values")[2]
         current_name = self.device_custom_names.get(serial, serial)
 
         win = tk.Toplevel(self.root)
@@ -3044,268 +1733,6 @@ class DeviceManageTool:
         ttk.Button(btn_frame, text="保存", command=_save, width=8).pack(side=tk.LEFT, padx=(0, 6))
         ttk.Button(btn_frame, text="取消", command=win.destroy, width=8).pack(side=tk.LEFT)
 
-    def _open_device_preview(self, serial):
-        """弹出设备实时画面预览窗口，含 dump_hierarchy 布局分析"""
-        if not serial:
-            messagebox.showwarning("预览", "设备串号为空")
-            return
-
-        dlg = tk.Toplevel(self.root)
-        dlg.title(f"📱 {serial}")
-        dlg.geometry("400x760")
-        dlg.resizable(True, True)
-
-        d_ref = [None]           # 共享 u2 连接，供布局分析复用
-        img_size_ref = [(1080, 1920)]  # 设备实际分辨率，供高亮坐标换算
-
-        # 顶部工具栏
-        btn_bar = ttk.Frame(dlg, padding=(8, 8, 8, 4))
-        btn_bar.pack(fill=tk.X)
-        ttk.Button(btn_bar, text="🔍 分析布局",
-                   command=lambda: self._show_layout_analysis(
-                       serial, canvas, d_ref, img_size_ref)).pack(side=tk.LEFT, padx=(0, 12))
-        ttk.Label(btn_bar, text="刷新间隔:").pack(side=tk.LEFT)
-        interval_var = tk.StringVar(value="1.0")
-        ttk.Entry(btn_bar, textvariable=interval_var, width=4).pack(side=tk.LEFT, padx=(2, 2))
-        ttk.Label(btn_bar, text="秒").pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(btn_bar, text="📡 scrcpy",
-                   command=lambda: self._launch_scrcpy(serial)).pack(side=tk.LEFT)
-
-        # 画面 Canvas
-        canvas = tk.Canvas(dlg, bg="#1e2433", highlightthickness=0)
-        canvas.pack(fill=tk.BOTH, expand=True)
-
-        # 状态栏
-        status_var = tk.StringVar(value="连接中…")
-        ttk.Label(dlg, textvariable=status_var, foreground="#6b7280",
-                  font=("PingFang SC", 9)).pack(fill=tk.X, padx=8, pady=(2, 6))
-
-        stop_event = threading.Event()
-        img_ref = [None]
-
-        def refresh_loop():
-            try:
-                import uiautomator2 as u2
-                from PIL import Image as PILImage, ImageTk
-            except ImportError as ie:
-                dlg.after(0, lambda: status_var.set(f"✗ 缺少依赖: {ie}"))
-                return
-
-            while not stop_event.is_set():
-                try:
-                    if d_ref[0] is None:
-                        d_ref[0] = u2.connect(serial)
-                    pil_img = d_ref[0].screenshot()
-                    iw, ih = pil_img.size
-                    img_size_ref[0] = (iw, ih)
-
-                    def update(img=pil_img, ow=iw, oh=ih):
-                        try:
-                            cw = canvas.winfo_width() or 360
-                            ch = canvas.winfo_height() or 640
-                            scale = min(cw / ow, ch / oh)
-                            nw, nh = int(ow * scale), int(oh * scale)
-                            resized = img.resize((nw, nh), PILImage.LANCZOS)
-                            photo = ImageTk.PhotoImage(resized)
-                            img_ref[0] = photo
-                            canvas.delete("screenshot")
-                            canvas.create_image(cw // 2, ch // 2, image=photo,
-                                                anchor="center", tags="screenshot")
-                            status_var.set(f"✓ {serial}  {ow}×{oh}  {time.strftime('%H:%M:%S')}")
-                        except Exception:
-                            pass
-
-                    dlg.after(0, update)
-                except Exception as ex:
-                    d_ref[0] = None
-                    dlg.after(0, lambda e=str(ex)[:60]: status_var.set(f"✗ {e}"))
-
-                try:
-                    iv = max(0.3, float(interval_var.get() or "1.0"))
-                except ValueError:
-                    iv = 1.0
-                stop_event.wait(iv)
-
-        t = threading.Thread(target=refresh_loop, daemon=True)
-        t.start()
-        dlg.protocol("WM_DELETE_WINDOW", lambda: (stop_event.set(), dlg.destroy()))
-
-    def _show_layout_analysis(self, serial, canvas, d_ref, img_size_ref):
-        """dump_hierarchy → 树形视图，点击节点在截图上高亮边界框"""
-        import xml.etree.ElementTree as ET
-        import re
-
-        status_win = tk.Toplevel(self.root)
-        status_win.title("正在抓取布局…")
-        status_win.geometry("260x60")
-        ttk.Label(status_win, text="正在 dump_hierarchy，请稍候…").pack(expand=True)
-        status_win.update()
-
-        def do_dump():
-            try:
-                import uiautomator2 as u2
-                d = d_ref[0]
-                if d is None:
-                    d = u2.connect(serial)
-                    d_ref[0] = d
-                xml_str = d.dump_hierarchy(compressed=False)
-                self.root.after(0, lambda: _build_ui(xml_str))
-            except Exception as ex:
-                self.root.after(0, lambda e=str(ex): (
-                    status_win.destroy(),
-                    messagebox.showerror("布局抓取失败", e)
-                ))
-
-        threading.Thread(target=do_dump, daemon=True).start()
-
-        def _build_ui(xml_str):
-            status_win.destroy()
-
-            win = tk.Toplevel(self.root)
-            win.title(f"布局分析 — {serial}")
-            win.geometry("780x600")
-            win.resizable(True, True)
-
-            # ── 顶部提示 ──
-            ttk.Label(win, text="点击节点 → 在截图上高亮元素边界",
-                      foreground="#6b7280", font=("PingFang SC", 9)).pack(
-                      anchor="w", padx=10, pady=(6, 2))
-
-            paned = ttk.PanedWindow(win, orient=tk.HORIZONTAL)
-            paned.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 6))
-
-            # ── 左：树形视图 ──
-            tree_frame = ttk.Frame(paned)
-            paned.add(tree_frame, weight=2)
-
-            cols = ("text", "res-id", "bounds")
-            tree = ttk.Treeview(tree_frame, columns=cols, show="tree headings")
-            tree.heading("#0",      text="组件类名")
-            tree.heading("text",    text="text")
-            tree.heading("res-id",  text="resource-id")
-            tree.heading("bounds",  text="bounds")
-            tree.column("#0",      width=160, minwidth=100)
-            tree.column("text",    width=120, minwidth=60)
-            tree.column("res-id",  width=160, minwidth=80)
-            tree.column("bounds",  width=120, minwidth=80)
-
-            vsb = ttk.Scrollbar(tree_frame, orient="vertical",   command=tree.yview)
-            hsb = ttk.Scrollbar(tree_frame, orient="horizontal",  command=tree.xview)
-            tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-            vsb.pack(side=tk.RIGHT,  fill=tk.Y)
-            hsb.pack(side=tk.BOTTOM, fill=tk.X)
-            tree.pack(fill=tk.BOTH, expand=True)
-
-            # ── 右：属性详情 ──
-            detail_frame = ttk.LabelFrame(paned, text="属性详情", padding=8)
-            paned.add(detail_frame, weight=1)
-            detail_text = scrolledtext.ScrolledText(
-                detail_frame, font=("Menlo", 9),
-                bg="#1e2433", fg="#a8c7fa",
-                relief="flat", borderwidth=0,
-                state=tk.DISABLED, wrap=tk.WORD)
-            detail_text.pack(fill=tk.BOTH, expand=True)
-
-            # ── 解析 XML 并填充树 ──
-            try:
-                root_el = ET.fromstring(xml_str)
-            except ET.ParseError as e:
-                messagebox.showerror("XML 解析失败", str(e))
-                win.destroy()
-                return
-
-            node_attrs = {}  # tree_item_id → dict of all attributes
-
-            def insert_node(parent_id, el):
-                cls = el.get("class", el.tag).rsplit(".", 1)[-1]
-                text  = el.get("text", "")[:40]
-                res   = el.get("resource-id", "")
-                bounds = el.get("bounds", "")
-                iid = tree.insert(parent_id, "end", text=cls,
-                                  values=(text, res, bounds))
-                node_attrs[iid] = dict(el.attrib)
-                for child in el:
-                    insert_node(iid, child)
-
-            for child in root_el:
-                insert_node("", child)
-
-            # ── 点击节点：高亮 + 显示详情 ──
-            def on_select(event):
-                sel = tree.selection()
-                if not sel:
-                    return
-                iid = sel[0]
-                attrs = node_attrs.get(iid, {})
-                bounds_str = attrs.get("bounds", "")
-
-                # 高亮边界框
-                nums = re.findall(r'\d+', bounds_str)
-                if len(nums) == 4:
-                    x1, y1, x2, y2 = map(int, nums)
-                    iw, ih = img_size_ref[0]
-                    cw = canvas.winfo_width() or 360
-                    ch = canvas.winfo_height() or 640
-                    sc = min(cw / iw, ch / ih)
-                    nw, nh = int(iw * sc), int(ih * sc)
-                    ox = (cw - nw) // 2
-                    oy = (ch - nh) // 2
-                    canvas.delete("highlight")
-                    canvas.create_rectangle(
-                        ox + int(x1 * sc), oy + int(y1 * sc),
-                        ox + int(x2 * sc), oy + int(y2 * sc),
-                        outline="#ff4444", width=2, tags="highlight")
-
-                # 属性详情
-                lines = "\n".join(f"{k}: {v}" for k, v in attrs.items())
-                detail_text.configure(state=tk.NORMAL)
-                detail_text.delete("1.0", tk.END)
-                detail_text.insert(tk.END, lines)
-                detail_text.configure(state=tk.DISABLED)
-
-            tree.bind("<<TreeviewSelect>>", on_select)
-            win.protocol("WM_DELETE_WINDOW", lambda: (canvas.delete("highlight"), win.destroy()))
-
-    def _launch_weditor(self, serial):
-        """启动 weditor 布局分析，serial 自动复制到剪贴板方便在浏览器粘贴"""
-        try:
-            import shutil, sys
-            we = shutil.which("weditor")
-            cmd = [we] if we else [sys.executable, "-m", "weditor"]
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.root.clipboard_clear()
-            self.root.clipboard_append(serial)
-            self.log_message(f"🔍 weditor 已启动，serial「{serial}」已复制到剪贴板，粘贴到浏览器即可")
-        except Exception as e:
-            messagebox.showerror("weditor 启动失败",
-                                 f"{e}\n\n请先安装：\npip install weditor")
-
-    def _launch_scrcpy(self, serial):
-        """调用 scrcpy 对指定设备投屏（独立窗口，非阻塞）"""
-        if not serial:
-            messagebox.showwarning("投屏", "设备串号为空，无法投屏")
-            return
-        try:
-            import shutil
-            scrcpy_path = shutil.which("scrcpy")
-            if not scrcpy_path:
-                # macOS 常见安装路径兜底
-                for p in ["/usr/local/bin/scrcpy", "/opt/homebrew/bin/scrcpy"]:
-                    if os.path.isfile(p):
-                        scrcpy_path = p
-                        break
-            if not scrcpy_path:
-                messagebox.showerror(
-                    "找不到 scrcpy",
-                    "未检测到 scrcpy，请先安装：\nbrew install scrcpy"
-                )
-                return
-            cmd = [scrcpy_path, "-s", serial, "--window-title", f"投屏 {serial}"]
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.log_message(f"📱 scrcpy 已启动 → {serial}")
-        except Exception as e:
-            messagebox.showerror("投屏失败", str(e))
-
     def on_treeview_click(self, event):
         """处理树形视图点击事件"""
         region = self.device_tree.identify_region(event.x, event.y)
@@ -3341,13 +1768,10 @@ class DeviceManageTool:
             
             current_state = self.device_checked.get(key, False)
             self.device_checked[key] = not current_state
-
-            new_checkbox = "✅" if not current_state else "⬜"
+            
+            new_checkbox = "☑" if not current_state else "☐"
             new_values = (new_checkbox,) + values[1:]
-            new_tags = [t for t in self.device_tree.item(item, "tags") if t != "checked_row"]
-            if not current_state:  # 变为选中
-                new_tags.append("checked_row")
-            self.device_tree.item(item, values=new_values, tags=tuple(new_tags))
+            self.device_tree.item(item, values=new_values)
     
     def toggle_all_selection(self):
         """全选/取消全选"""
@@ -3357,12 +1781,11 @@ class DeviceManageTool:
         
         # 检查是否全部选中
         def get_key_from_item(item):
-            tags = self.device_tree.item(item, "tags")
-            serial = tags[0] if tags else self.device_tree.item(item, "values")[2]
+            container_name = self.device_tree.item(item, "values")[2]
             for d in self.devices:
-                if d["container_name"].lstrip("/") == serial:
-                    return (serial, d["ip"])
-            return (serial, "")
+                if d["container_name"].lstrip("/") == container_name:
+                    return (container_name, d["ip"])
+            return (container_name, "")
         
         all_checked = all(self.device_checked.get(get_key_from_item(item), False) for item in all_items)
         
@@ -3374,15 +1797,12 @@ class DeviceManageTool:
             key = get_key_from_item(item)
             self.device_checked[key] = new_state
             
-            new_checkbox = "✅" if new_state else "⬜"
+            new_checkbox = "☑" if new_state else "☐"
             new_values = (new_checkbox,) + values[1:]
-            new_tags = [t for t in self.device_tree.item(item, "tags") if t != "checked_row"]
-            if new_state:
-                new_tags.append("checked_row")
-            self.device_tree.item(item, values=new_values, tags=tuple(new_tags))
-
+            self.device_tree.item(item, values=new_values)
+        
         # 同步更新表头的复选框显示
-        header_checkbox = "✅" if new_state else "⬜"
+        header_checkbox = "☑" if new_state else "☐"
         self.device_tree.heading("选择", text=header_checkbox)
     
     def get_selected_devices(self):
@@ -3581,6 +2001,7 @@ class DeviceManageTool:
         for item in self.device_tree.get_children():
             self.device_tree.delete(item)
 
+        self.device_tree.tag_configure("placeholder", foreground="#aaaaaa")
 
         sorted_devices = sorted(self.devices, key=self._device_sort_key)
 
@@ -3588,14 +2009,11 @@ class DeviceManageTool:
             serial = device_info["container_name"].lstrip("/")
             key = (serial, device_info["ip"])
             checked = self.device_checked.get(key, False)
-            checkbox = "✅" if checked else "⬜"
+            checkbox = "☑" if checked else "☐"
 
             has_custom = serial in self.device_custom_names
             display_name = self.device_custom_names[serial] if has_custom else "双击编辑昵称"
-            row_tags_list = [serial] if has_custom else [serial, "placeholder"]
-            if checked:
-                row_tags_list.append("checked_row")
-            row_tags = tuple(row_tags_list)
+            row_tags = (serial,) if has_custom else (serial, "placeholder")
 
             item_id = self.device_tree.insert("", "end", values=(
                 checkbox,
@@ -4048,11 +2466,6 @@ class DeviceManageTool:
     # ==================== 配置管理 ====================
     def save_config(self):
         """保存配置"""
-        # 加载期间禁止写入，避免 trace 回调把默认值覆盖掉已保存的配置
-        if getattr(self, "_loading_config", False):
-            return
-        # 先把当前界面状态同步到 active profile
-        self._profile_save_current()
         # 获取当前网段设置
         networks_str = self.network_entry.get().strip()
         scan_networks = [n.strip() for n in networks_str.replace('，', ',').split(',') if n.strip()]
@@ -4109,24 +2522,8 @@ class DeviceManageTool:
                 "platform_country": self.platform_country_var.get(),
                 "platform_service": self.platform_service_var.get(),
                 "platform_provider_ids": self.platform_provider_ids_var.get(),
-                # 打开App配置
-                "open_app_name": self.open_app_var.get() if hasattr(self, "open_app_var") else "",
-                "open_app_delay": self.open_app_delay_var.get() if hasattr(self, "open_app_delay_var") else "3",
-                # 坐标点击配置
-                "coord_tap_x": self.coord_tap_x_var.get() if hasattr(self, "coord_tap_x_var") else "",
-                "coord_tap_y": self.coord_tap_y_var.get() if hasattr(self, "coord_tap_y_var") else "",
-                "coord_tap_delay": self.coord_tap_delay_var.get() if hasattr(self, "coord_tap_delay_var") else "500",
-                # 输入文字配置
-                "input_text_content": self.input_text_var.get() if hasattr(self, "input_text_var") else "",
-                "input_text_delay": self.input_text_delay_var.get() if hasattr(self, "input_text_delay_var") else "500",
-                # 点击文字配置
-                "click_text_content": self.click_text_var.get() if hasattr(self, "click_text_var") else "",
-                "click_text_delay": self.click_text_delay_var.get() if hasattr(self, "click_text_delay_var") else "500",
             },
             "device_custom_names": self.device_custom_names,
-            "custom_open_apps": self.custom_open_apps,
-            "script_profiles": self.script_profiles,
-            "active_profile_idx": self.active_profile_idx,
             "phones": self.phones,
             "emails": self.emails,
             "visas": self.visas,
@@ -4156,8 +2553,7 @@ class DeviceManageTool:
         config_path = os.path.join(self._get_app_path(), "config.json")
         if not os.path.exists(config_path):
             return
-
-        self._loading_config = True
+        
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
@@ -4357,61 +2753,6 @@ class DeviceManageTool:
                 
 
 
-            # 恢复自定义应用列表
-            self.custom_open_apps = config.get("custom_open_apps", [])
-            if hasattr(self, "open_app_combo"):
-                vals = list(self._PRESET_APPS.keys()) + \
-                       [a["name"] for a in self.custom_open_apps]
-                self._open_app_combo_values = vals
-                self.open_app_combo["values"] = vals
-
-            # 恢复打开App配置
-            if "open_app_name" in s_conf and hasattr(self, "open_app_var"):
-                self.open_app_var.set(s_conf["open_app_name"])
-            if "open_app_delay" in s_conf and hasattr(self, "open_app_delay_var"):
-                self.open_app_delay_var.set(s_conf["open_app_delay"])
-
-            # 恢复坐标点击配置
-            if "coord_tap_x" in s_conf and hasattr(self, "coord_tap_x_var"):
-                self.coord_tap_x_var.set(s_conf["coord_tap_x"])
-            if "coord_tap_y" in s_conf and hasattr(self, "coord_tap_y_var"):
-                self.coord_tap_y_var.set(s_conf["coord_tap_y"])
-            if "coord_tap_delay" in s_conf and hasattr(self, "coord_tap_delay_var"):
-                self.coord_tap_delay_var.set(s_conf["coord_tap_delay"])
-
-            # 恢复输入文字配置
-            if "input_text_content" in s_conf and hasattr(self, "input_text_var"):
-                self.input_text_var.set(s_conf["input_text_content"])
-            if "input_text_delay" in s_conf and hasattr(self, "input_text_delay_var"):
-                self.input_text_delay_var.set(s_conf["input_text_delay"])
-
-            # 恢复点击文字配置
-            if "click_text_content" in s_conf and hasattr(self, "click_text_var"):
-                self.click_text_var.set(s_conf["click_text_content"])
-            if "click_text_delay" in s_conf and hasattr(self, "click_text_delay_var"):
-                self.click_text_delay_var.set(s_conf["click_text_delay"])
-
-            # 恢复多脚本（兼容旧格式自动迁移）
-            if "script_profiles" in config and config["script_profiles"]:
-                self.script_profiles = config["script_profiles"]
-                self.active_profile_idx = max(0, min(
-                    config.get("active_profile_idx", 0),
-                    len(self.script_profiles) - 1))
-            else:
-                # 旧格式：迁移成单个默认 profile
-                old_steps = config.get("custom_script_steps", [])
-                old_rules = config.get("watch_rules", [])
-                old_interval = config.get("watch_interval", "1.0")
-                self.script_profiles = [{"name": "默认脚本", "steps": old_steps,
-                                         "watch_rules": old_rules, "watch_interval": old_interval}]
-                self.active_profile_idx = 0
-            try:
-                self._profile_load(self.active_profile_idx)
-                if hasattr(self, "_profile_combo"):
-                    self._refresh_profile_combo()
-            except Exception:
-                pass
-
             # 恢复平台养号配置
             for prefix in ("douyin", "kuaishou", "xiaohongshu", "xianyu"):
                 c = config.get(f"{prefix}_config", {})
@@ -4423,9 +2764,7 @@ class DeviceManageTool:
             self.log_message("✓ 配置已加载")
         except Exception as e:
             self.log_message(f"加载配置失败: {e}")
-        finally:
-            self._loading_config = False
-
+    
     # ==================== 文件服务器 ====================
     def _start_file_server(self):
         """启动本地文件服务器"""

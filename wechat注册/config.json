@@ -11,26 +11,15 @@
   },
   "devices": [
     {
-      "container_name": "198.18.0.11:5555",
-      "ip": "198.18.0.11",
-      "host_ip": "198.18.0.11",
+      "container_name": "4EV0222B17004876",
+      "ip": "",
+      "host_ip": "4EV0222B17004876",
       "port": 5555,
       "api_port": 5555,
       "rpa_port": 5555,
       "instance_index": 1,
       "host_index": 1,
-      "status": "offline"
-    },
-    {
-      "container_name": "198.18.0.2:5555",
-      "ip": "198.18.0.2",
-      "host_ip": "198.18.0.2",
-      "port": 5555,
-      "api_port": 5555,
-      "rpa_port": 5555,
-      "instance_index": 2,
-      "host_index": 2,
-      "status": "offline"
+      "status": "在线"
     }
   ],
   "scan_networks": [
@@ -56,10 +45,10 @@
   },
   "script_config": {
     "name_lang": "中文",
-    "country": "111",
+    "country": "",
     "char_mode": 0,
     "pwd_mode": "prefix",
-    "pwd_prefix": "222",
+    "pwd_prefix": "",
     "pwd_custom": "",
     "skip_count": "0",
     "tiktok_mode": "phone",
@@ -74,20 +63,144 @@
     "platform_api_key": "",
     "platform_country": "187",
     "platform_service": "wb",
-    "platform_provider_ids": "216"
+    "platform_provider_ids": "216",
+    "open_app_name": "wearfit Pro",
+    "open_app_delay": "3",
+    "coord_tap_x": "111",
+    "coord_tap_y": "111",
+    "coord_tap_delay": "500",
+    "input_text_content": "https://v.kuaishou.com/JVmZFrGx 以善意施救，以陪伴相守 该作品在快手被播放过512.7万次，点击链接，打开【快手】直接观看！",
+    "input_text_delay": "500",
+    "click_text_content": "333",
+    "click_text_delay": "500"
   },
   "device_custom_names": {
     "4EV0222B17004876": "000",
     "ALTMVB3B17005679": "我自己的手机",
-    "198.18.0.2:5555": "sdfsdfsd"
+    "198.18.0.2:5555": "sdfsdfsd",
+    "RF8X501B78H": "111"
   },
+  "custom_open_apps": [
+    {
+      "name": "wearfit Pro",
+      "package": "com.wakeup.howear"
+    }
+  ],
+  "script_profiles": [
+    {
+      "name": "默认脚本",
+      "steps": [
+        {
+          "type": "open_app",
+          "vars": {
+            "app": "wearfit Pro",
+            "stop": "True"
+          },
+          "stop_condition": "",
+          "show_stop_cond": false
+        },
+        {
+          "type": "loop",
+          "vars": {
+            "count": "1"
+          },
+          "children": [
+            {
+              "type": "swipe",
+              "vars": {
+                "direction": "向上",
+                "distance": "500",
+                "count": "8"
+              },
+              "stop_condition": "添加设备",
+              "show_stop_cond": true
+            },
+            {
+              "type": "tap_text",
+              "vars": {
+                "keyword": "添加设备"
+              },
+              "stop_condition": "",
+              "show_stop_cond": false
+            },
+            {
+              "type": "wait",
+              "vars": {
+                "seconds": "10"
+              },
+              "stop_condition": "智能手表",
+              "show_stop_cond": true
+            },
+            {
+              "type": "tap_text",
+              "vars": {
+                "keyword": "智能手表"
+              },
+              "stop_condition": "",
+              "show_stop_cond": false
+            },
+            {
+              "type": "wait",
+              "vars": {
+                "seconds": "10"
+              },
+              "stop_condition": "扫一扫",
+              "show_stop_cond": true
+            },
+            {
+              "type": "tap_text",
+              "vars": {
+                "keyword": "扫一扫"
+              },
+              "stop_condition": "",
+              "show_stop_cond": false
+            }
+          ],
+          "stop_condition": "",
+          "show_stop_cond": false
+        }
+      ],
+      "watch_rules": [],
+      "watch_interval": "1.0"
+    },
+    {
+      "name": "222",
+      "steps": [
+        {
+          "type": "loop",
+          "vars": {
+            "count": "11"
+          },
+          "children": [
+            {
+              "type": "open_app",
+              "vars": {
+                "app": "wearfit Pro",
+                "stop": "False"
+              },
+              "stop_condition": "",
+              "show_stop_cond": false
+            }
+          ],
+          "stop_condition": "",
+          "show_stop_cond": false
+        }
+      ],
+      "watch_rules": [
+        "111",
+        "222"
+      ],
+      "watch_interval": "1.0"
+    }
+  ],
+  "active_profile_idx": 1,
   "phones": [],
   "emails": [],
   "visas": [],
   "visa_checked_state": {},
   "visa_sync_manager": {},
   "douyin_config": {
-    "config1": "111",
+    "config1": "",
     "config2": "",
     "config3": "",
     "config4": "",
@@ -95,7 +208,7 @@
   },
   "kuaishou_config": {
     "config1": "",
-    "config2": "333",
+    "config2": "",
     "config3": "",
     "config4": "",
     "config5": ""
@@ -103,7 +216,7 @@
   "xiaohongshu_config": {
     "config1": "",
     "config2": "",
-    "config3": "444",
+    "config3": "",
     "config4": "",
     "config5": ""
   },
