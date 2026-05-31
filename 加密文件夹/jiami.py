@@ -8,6 +8,7 @@ def encrypt_code():
     # 1. 读取你未加密的业务代码（把真实代码放在 code.py 里）
     with open(jiami_file_path, "r", encoding="utf-8") as f:
         raw_code = f.read()
+        #pr
 
     # 2. 加密
     fernet = Fernet(KEY)
