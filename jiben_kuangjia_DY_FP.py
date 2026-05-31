@@ -1411,7 +1411,7 @@ def find_order_info(ocr_data):
     ]
 
     # ========== 1. 找状态锚点 ==========
-    status_keywords = ["交易完成", "交易关闭", "待发货", "待收货"]
+    status_keywords = ["交易完成", "交易关闭", "待发货", "运输中"]
     anchor_item = None
     anchor_y = 0
     beizhus = ""
@@ -1967,18 +1967,24 @@ def main_douyin(serial):
                     last_more.click()
                     time.sleep(3)
                     if (d(text='查看物流').exists(timeout=3)):
+                        print("更多的五六")
                         random_click_view(d, d(text='查看物流'))
                         time.sleep(random.randint(1, 3))
                         if (d(text='复制').exists(timeout=8)):
-                            # print("已经进入五六页面")
-                            # print(d.dump_hierarchy())
+                            print("已经进入五六页面")
+                            print(d.dump_hierarchy())
 
 
                             wuliu = parse_logistics_info(d.dump_hierarchy())
+                            print("wuliu111=",wuliu)
                             if (wuliu["快递单号"] != None):
+                                print("kaishi物流截图")
                                 take_screenshot_quan(d, image_path_phone, serial, class_phone,wuliu["快递单号"])
                             result_info = result_info | wuliu
+                        else:
+                            print("没有复制")
                     else:
+                        print("页面的五六")
                         back_to_orderList(d)
                         if (d(text='查看物流').exists(timeout=5)):  # 查看物流有时候不是点击更多 的 弹窗，而是直接暴露出来的
                             print("查看物流")
@@ -1988,13 +1994,17 @@ def main_douyin(serial):
 
                             time.sleep(random.randint(1, 3))
                             if (d(text='复制').exists(timeout=8)):
-                                # print("已经进入五六页面")
-                                # print(d.dump_hierarchy())
+                                print("已经进入五六页面")
+                                print(d.dump_hierarchy())
                                 # take_screenshot_quan(d, image_path_phone, serial,class_phone)
                                 wuliu = parse_logistics_info(d.dump_hierarchy())
+                                print("wuliu111=", wuliu)
                                 if (wuliu["快递单号"] != None):
+                                    print("kaishi物流截图")
                                     take_screenshot_quan(d, image_path_phone, serial, class_phone, wuliu["快递单号"])
                                 result_info = result_info | wuliu
+                            else:
+                                print("没有复制")
                             wuliu_flag = 1
                             if (back_to_orderList(d) != 1):
                                 continue

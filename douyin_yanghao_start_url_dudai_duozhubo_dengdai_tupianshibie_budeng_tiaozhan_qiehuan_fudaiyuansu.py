@@ -988,15 +988,35 @@ def operate_device(serial, class_phone, search_path, comment_path, task, run_tim
 
 
 def random_click_view(d, view):
-    bottom = view["bounds"]["top"]
-    left = view["bounds"]["left"]
+        """
+        根据控件 bounds，在控件中心附近安全范围内随机点击
+        :param d: 设备操作对象（如 adbutils、uiautomator2）
+        :param view: 控件信息字典，包含 bounds: {top, left, right, bottom}
+        """
+        # 取出控件四个边界
+        top = int(view["bounds"]["top"])
+        left = int(view["bounds"]["left"])
+        right = int(view["bounds"]["right"])
+        bottom = int(view["bounds"]["bottom"])
 
-    random_x = int(left) + random.randint(2, 15)
-    random_y = int(bottom) + random.randint(2, 15)
-    print("开始点击")
-    print(random_x, random_y)
+        # 计算控件中心点坐标
+        center_x = (left + right) // 2
+        center_y = (top + bottom) // 2
 
-    d.click(random_x, random_y)
+        # 计算控件宽高，用于限制随机偏移范围（不超出控件）
+        width = right - left
+        height = bottom - top
+
+        # 安全偏移：最大偏移量 = 宽/高的 40%，保证不会点出控件
+        max_offset_x = int(width * 0.4)
+        max_offset_y = int(height * 0.4)
+
+        # 中心附近随机偏移（至少偏移2像素，避免死点）
+        random_x = center_x + random.randint(-max_offset_x, max_offset_x)
+        random_y = center_y + random.randint(-max_offset_y, max_offset_y)
+
+        print(f"✅ 开始点击，坐标：({random_x}, {random_y})")
+        d.click(random_x, random_y)
 
 
 def check_time_difference(interval_seconds):
@@ -1341,9 +1361,10 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                 d.watcher.remove()
                 print(serial + "---------", "通过搜索进入")
                 write_serial_log(serial,  "---------", "通过搜索进入")
-
+                sousuo_view = None
                 if (d(text='首页').exists(timeout=3) or d(text='推荐').exists(timeout=3)):  # descriptionContains
                     if (d(description='搜索').exists(timeout=3)):  # descriptionContains
+                        sousuo_view = d(description='搜索').info
                         d(description='搜索').click()
                         print("当前有搜索按钮")
                         write_serial_log(serial,"当前有搜索按钮")
@@ -1388,9 +1409,15 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                     #d(text="搜索").click()
                     print(f"{serial}----有搜索按钮")
                     write_serial_log(serial, str("---有搜索按钮"))
-
-                    random_click_view(d,d(text="搜索").info)
+                    if(sousuo_view):
+                        write_serial_log(serial, str("根据首页的搜索点"))
+                        random_click_view(d,sousuo_view)
+                    else:
+                        write_serial_log(serial, str("正常搜索进入"))
+                        write_serial_log(serial, str(d(text="搜索").info))
+                        random_click_view(d,d(text="搜索").info)
                 else:
+                    write_serial_log(serial, str("坐标点击"))
                     d.click(d.info["displayWidth"] - 50, 180)
                 time.sleep(8)
 
@@ -1505,6 +1532,9 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                 if (d(textContains="说点什么").exists(timeout=15)):
                     print(serial + "---------", "当前成功进入直播间")
                     write_serial_log(serial, "---------", "当前成功进入直播间")
+
+                    if (d(text="关注").exists(timeout=3)):
+                        random_click_view(d,d(text="关注").info)
 
                 else:
                     return "66"
@@ -1632,10 +1662,15 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                     # point = find_target_in_template_folder(path_photo, "fudai_path")
 
                                     if(step != 0):
-                                        print(serial + "---------", "当前会等小时间=", sleep_time_phone)
-                                        write_serial_log(serial,  "---------", "当前会等小时间=", sleep_time_phone)
 
+                                        print(serial + "---------", "当前会等大时间，当前批次=", class_phone)
+                                        write_serial_log(serial, "---------", "当前会等大时间，当前批次=", class_phone)
+                                        sleep_sleep(class_phone, init_time=init_time_2)
+
+                                        print(serial + "---------", "当前会等小时间=", sleep_time_phone)
+                                        write_serial_log(serial, "---------", "当前会等小时间=", sleep_time_phone)
                                         time.sleep(sleep_time_phone)
+
                                     else:
                                         print(serial + "---------", "第一次不用等小时间", sleep_time_phone)
                                     point = find_id_from_area_2(d,30,500,200,600)
@@ -1664,8 +1699,6 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                         xx, yy = xxxxxxx,yyyyyyy
                                         print(f"{serial}---->当前有福袋，第一层")
                                         write_serial_log(serial, str("当前有福袋，第一层"))
-
-                                        sleep_sleep(class_phone, init_time=init_time_2)
                                         d.click(int(xx),int(yy))
 
                                     else:
@@ -1766,6 +1799,29 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                 print(f"重新获取ocr之后={ocr}")
                             if (step != 0):
                                 sleep_sleep(class_phone, init_time=init_time_2)
+
+                            daojishi_time = get_lottery_remaining_time(all_data)
+                            print(f"{serial}------>倒计时daojishi_time=", daojishi_time)
+                            write_serial_log(serial, f"{serial}------>倒计时daojishi_time=", daojishi_time)
+                            if (str(daojishi_time).isdigit()):
+
+                                if (daojishi_time == 0):
+                                    time.sleep(16)
+
+                                    print(f"{serial}---倒计时结束，开始回到福袋")
+                                    write_serial_log(serial, f"{serial}---倒计时结束，开始回到福袋----当前是直接倒计时为0 了啊")
+
+                                    for ppp in range(3):
+                                        if (d(description='说点什么...').exists(timeout=3)):
+                                            print(f"{serial}---->huidao，福袋页面了")
+                                            write_serial_log(serial,f"{serial}---->huidao，福袋页面了")
+                                        else:
+                                            print(f"{serial}---倒计时结束，返回")
+                                            write_serial_log(serial,f"{serial}---倒计时结束，返回")
+                                            d.press("back")
+
+
+
 
                             if (str(all_data).count("一键发表评论") > 0):
                                 # d(text='添加评论...').click()
@@ -2075,9 +2131,10 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                 continue
 
                             else:
-                                print(serial + "---------", "加入购物粉丝团并关注主播")
-                                write_serial_log(serial, str("加入购物粉丝团并关注主播"))
+                                print(serial + "---------", "没有加入购物粉丝团并关注主播")
+                                write_serial_log(serial, str("没有加入购物粉丝团并关注主播"))
                                 # return
+
 
 
                             if (str(all_data).count("加入直播粉丝团并关注主播") > 0):
@@ -2431,7 +2488,7 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                 print(serial + "---------", "没有立即领取奖品")
                                 write_serial_log(serial, str("没有立即领取奖品"))
                             # return
-                            if (str(all_data).count("等待开奖") > 0):
+                            if (str(all_data).count("等待开奖") > 0 or str(all_data).count("请勿离开直播间") > 0 or str(all_data).count("失去抽奖资格") > 0):
                                 # d(text='添加评论...').click()
                                 step = step + 1
                                 # d(text='参与成功 等待开奖').click()
@@ -2498,6 +2555,8 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                     if(daojishi_time > 0):
                                         time.sleep(daojishi_time+random.randint(20,50))
                                     elif(daojishi_time == 0):
+                                        print(f"{serial}------>倒计时判定为0=", daojishi_time)
+                                        write_serial_log(serial, f"{serial}------>倒计时判定为0=", daojishi_time)
                                         time.sleep(16)
                                     else:
                                         print(f"{serial}------>当前获取的倒计时不对啊", daojishi_time)
@@ -4587,6 +4646,7 @@ def get_lottery_remaining_time(ocr_result):
     3. 按x坐标从右到左排序，确定分钟/秒数
     """
     # 步骤1：定位"后开奖"文本项并计算重心
+    target_pre_num = -1
     target_item = None
     target_centroid_x = 0
     target_centroid_y = 0
@@ -4627,12 +4687,17 @@ def get_lottery_remaining_time(ocr_result):
                 'centroid_y': curr_y
             })
     print("valid_nums=",valid_nums)
+
+    if(target_pre_num == 0):
+        print(f"开奖倒计时111：0分{target_pre_num}秒（总计{int(target_pre_num)}秒）")
+        return 0
+
     # 步骤3：处理有效数字项
     if not valid_nums:
         # 兜底：如果没有左侧数字，检查"后开奖"文本内的数字（如"46后开奖"）
         if target_pre_num:
             return f"开奖倒计时：0分{target_pre_num}秒（总计{int(target_pre_num)}秒）"
-        return "未找到开奖倒计时数字"
+        return 0
 
     # 按x坐标从大到小排序（越靠右越接近"后开奖"）
     valid_nums.sort(key=lambda x: x['centroid_x'], reverse=True)
