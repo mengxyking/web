@@ -88,7 +88,7 @@ def get_available_ocr():
         # 都忙则等待50ms再查，避免CPU空转
         time.sleep(0.05)
 
-def find_id_from_area_2(d, x1_1,x2_2, y1_1 ,y2_2):
+def find_id_from_area_2(serial,d, x1_1,x2_2, y1_1 ,y2_2):
     xml = d.dump_hierarchy()
     tree = etree.fromstring(xml.encode('utf-8'))
 
@@ -122,10 +122,12 @@ def find_id_from_area_2(d, x1_1,x2_2, y1_1 ,y2_2):
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
             # print(center_x,center_y)
+            write_serial_log(serial, "point=", center_x,center_y)
 
             zuobiaodian.append((center_x,center_y))
     zuobiaodian = list(set(zuobiaodian))
     # print("zuobiaodian=",zuobiaodian)
+    write_serial_log(serial, "zuobiaodian=",zuobiaodian)
     zuobiaodian1 = zuobiaodian
     for elem in elements:
 
@@ -141,6 +143,7 @@ def find_id_from_area_2(d, x1_1,x2_2, y1_1 ,y2_2):
 
         x1, y1, x2, y2 = map(int, coords[0])
         #print("x1, y1, x2, y2",x1, y1, x2, y2)
+        write_serial_log(serial, "x1, y1, x2, y2",x1, y1, x2, y2)
         for iii in zuobiaodian:
            if(x1 != 0 and y1 != 0 and x1 < iii[0] < x2 and y1 < iii[1] < y2):
                 print("x1, y1, x2, y2",x1, y1, x2, y2)
@@ -150,10 +153,12 @@ def find_id_from_area_2(d, x1_1,x2_2, y1_1 ,y2_2):
                 # print(resource_id, text, contentdesc)
                 if( text != "" or contentdesc != ""):
                     print(f"应该去掉,{iii}，text={text}，contentdesc={contentdesc}")
+                    write_serial_log(serial, f"应该去掉,{iii}，text={text}，contentdesc={contentdesc}")
                     if(iii in zuobiaodian1):
                         zuobiaodian1.remove(iii)
     print("-----------")
     print(zuobiaodian1)
+    write_serial_log(serial, zuobiaodian1)
     return zuobiaodian1
 
 def init_serial_logger(serial):
@@ -559,7 +564,7 @@ def take_screenshot(d):
     try:
         SAVE_DIR = create_folder_on_current_disk()
         # 生成带时间戳的文件名，避免重复
-        random_int = random.randint(0,10000)
+        random_int = random.randint(0,100000)
         timestamp = time.strftime("%Y%m%d%H%M%S")
         save_path = os.path.join(SAVE_DIR, f"{timestamp}_{str(random_int)}.png")
         # 截图并保存
@@ -1439,11 +1444,13 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                     print(all_data)
                     write_serial_log(serial, str(all_data))
 
-                    point = ocr.getPoint_by_data(all_data, "直播中")
+                    point = ocr.getPoint_by_data_true(all_data, "直播中")
                     write_serial_log(serial, str("直播中"))
 
                     print(point)
+                    write_serial_log(serial, str("ocr point"))
                     if (point != None):
+                        write_serial_log(serial, str(f"ocr dian直播中进直播间{point[0]}{point[1]}"))
                         d.click(point[0] + random.randint(-3, 3), point[1] + random.randint(-3, 3))
 
 
@@ -1673,7 +1680,7 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
 
                                     else:
                                         print(serial + "---------", "第一次不用等小时间", sleep_time_phone)
-                                    point = find_id_from_area_2(d,30,500,200,600)
+                                    point = find_id_from_area_2(serial,d,30,500,200,600)
                                     xxxxxxx,yyyyyyy = 0 , 0
                                     for uuuu in point:
                                         xxx,yyy = uuuu
@@ -1819,9 +1826,25 @@ def main(serial, class_phone, search_path, comment_path, task, run_time, change_
                                             print(f"{serial}---倒计时结束，返回")
                                             write_serial_log(serial,f"{serial}---倒计时结束，返回")
                                             d.press("back")
+                            else:
+                                print(f"{serial}---倒计时结束，开始回到福袋")
+                                write_serial_log(serial,
+                                                 f"{serial}---fanhui的倒计时不是数字啊")
 
+                                time.sleep(16)
 
+                                print(f"{serial}---倒计时结束，开始回到福袋")
+                                write_serial_log(serial,
+                                                 f"{serial}---倒计时结束，开始回到福袋----当前是直接倒计时为0 了啊")
 
+                                for ppp in range(3):
+                                    if (d(description='说点什么...').exists(timeout=3)):
+                                        print(f"{serial}---->huidao，福袋页面了")
+                                        write_serial_log(serial, f"{serial}---->huidao，福袋页面了")
+                                    else:
+                                        print(f"{serial}---倒计时结束，返回")
+                                        write_serial_log(serial, f"{serial}---倒计时结束，返回")
+                                        d.press("back")
 
                             if (str(all_data).count("一键发表评论") > 0):
                                 # d(text='添加评论...').click()
@@ -4663,7 +4686,8 @@ def get_lottery_remaining_time(ocr_result):
             break
 
     if not target_item:
-        return "未检测到「后开奖」文本"
+        print("未检测到「后开奖」文本")
+        return 0
 
     # 步骤2：筛选符合条件的数字项
     # 条件：纯数字 + y轴与目标差≤20（同一水平） + x轴＜目标x（左侧）
@@ -4696,7 +4720,8 @@ def get_lottery_remaining_time(ocr_result):
     if not valid_nums:
         # 兜底：如果没有左侧数字，检查"后开奖"文本内的数字（如"46后开奖"）
         if target_pre_num:
-            return f"开奖倒计时：0分{target_pre_num}秒（总计{int(target_pre_num)}秒）"
+            print(f"开奖倒计时：0分{target_pre_num}秒（总计{int(target_pre_num)}秒）")
+            return 0
         return 0
 
     # 按x坐标从大到小排序（越靠右越接近"后开奖"）
